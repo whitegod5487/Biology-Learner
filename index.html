@@ -688,8 +688,8 @@
           <h2 class="page-title">登入</h2>
           <p class="sub">請登入以使用生物溫習程式</p>
           <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)" novalidate>
-            <label class="auth-label" for="loginUsername">用戶名稱</label>
-            <input type="text" id="loginUsername" class="auth-input" maxlength="20" autocomplete="username" placeholder="請輸入用戶名稱">
+            <label class="auth-label" for="loginEmail">電郵地址</label>
+            <input type="email" id="loginEmail" class="auth-input" autocomplete="email" placeholder="請輸入電郵地址">
             <label class="auth-label" for="loginPassword">密碼</label>
             <input type="password" id="loginPassword" class="auth-input" autocomplete="current-password" placeholder="請輸入密碼">
             <p id="loginNotice" class="auth-notice"></p>
@@ -708,7 +708,9 @@
         <div class="auth-card">
           <h2 class="page-title">註冊新帳戶</h2>
           <form id="registerForm" class="auth-form" onsubmit="handleRegister(event)" novalidate>
-            <label class="auth-label" for="registerUsername">用戶名稱（1–20 字元：中文字、英文字母、數字、空格）</label>
+            <label class="auth-label" for="registerEmail">電郵地址</label>
+            <input type="email" id="registerEmail" class="auth-input" autocomplete="email" placeholder="請輸入電郵地址">
+            <label class="auth-label" for="registerUsername">用戶名稱／顯示名稱（1–20 字元：中文字、英文字母、數字、空格）</label>
             <input type="text" id="registerUsername" class="auth-input" maxlength="20" autocomplete="username" placeholder="例如：小明 或 Bob123">
             <label class="auth-label" for="registerPassword">密碼（至少 6 個字元）</label>
             <input type="password" id="registerPassword" class="auth-input" autocomplete="new-password" placeholder="請輸入密碼">
@@ -723,6 +725,7 @@
             <p class="auth-success-text">註冊成功！你的用戶代碼：</p>
             <div id="registerUserCode" class="auth-code-box"></div>
             <p class="auth-hint">請記下此代碼（登入後亦會顯示於頁首）。</p>
+            <p class="auth-hint">注意：若已開啟電郵驗證（Confirm email），請先到電郵收件匣點擊確認連結，然後先可以登入。</p>
             <button type="button" class="btn btn-success" onclick="proceedToLogin()">前往登入</button>
           </div>
           <p class="auth-switch">已有帳戶？<button type="button" class="auth-link-btn" onclick="showLoginPage()">返回登入</button></p>

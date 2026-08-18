@@ -962,7 +962,7 @@ function buildTechMcq(mcq, mi) {
 // 本程式改用 Supabase 作後端：
 //   - 密碼由 Supabase 於伺服器端以 bcrypt 雜湊及驗證，絕不儲存或傳送明文密碼。
 //   - 帳戶資料（profiles）與每用戶錯題（wrong_questions）均由 RLS 保護。
-//   - 登入仍然使用「用戶名稱 + 密碼」；電子郵件僅為內部產生的合成電郵，並非真實電郵。
+//   - 登入／註冊使用「真實電郵 + 密碼」；「用戶名稱／顯示名稱」仍會經字典（USER_CODE_DICT）自動產生用戶代碼。
 //   - 主題設定（bioAppTheme）維持儲存於 localStorage（全局設定，屬預期行為）。
 
 let currentUser = null;          // 目前登入的 Supabase user 物件
@@ -980,38 +980,6 @@ if (typeof supabase !== 'undefined' &&
     sb = null;
     supabaseReady = false;
   }
-}
-
-// 內部合成電郵用嘅 8 位十六進位確定性雜湊（djb2 變體，>>> 0 保證無符號）
-function hashEmailLocal(str) {
-  let h = 5381;
-  for (let i = 0; i < str.length; i++) {
-    h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
-  }
-  return h.toString(16).padStart(8, '0');
-}
-
-// 產生內部用合成電郵（僅供 Supabase 帳戶識別，並非真實電郵）
-// 每個用戶名稱都對應一個確定性且唯一的地址：
-//   英文 / 數字保留，中文 → '_' + 十六進位碼位，空格 → '_'；
-//   截斷至 60 字元，再附加 '_' + 8 位雜湊（用完整 trim 後嘅用戶名稱計算）
-function emailFromUsername(username) {
-  const trimmed = String(username || '').trim();
-  const lower = trimmed.toLowerCase();
-  let local = '';
-  for (const ch of lower) {
-    const code = ch.charCodeAt(0);
-    if ((code >= 0x61 && code <= 0x7a) || (code >= 0x30 && code <= 0x39)) {
-      local += ch;
-    } else if (ch === ' ') {
-      local += '_';
-    } else {
-      local += '_' + code.toString(16);
-    }
-  }
-  if (local.length > 60) local = local.slice(0, 60);
-  local = local + '_' + hashEmailLocal(trimmed);
-  return local + '@local.bioapp';
 }
 
 function getCurrentUser() {
@@ -1115,8 +1083,12 @@ function updateAuthHeader() {
 function showLoginPage() {
   stopChallenge();
   updateAuthHeader();
-  // 重置登入頁提示（proceedToLogin 會喺呼叫後再顯示成功提示）
+  // 重置登入頁（proceedToLogin 會喺呼叫後再填返電郵並顯示成功提示）
+  const emailEl = document.getElementById('loginEmail');
+  const passwordEl = document.getElementById('loginPassword');
   const loginNotice = document.getElementById('loginNotice');
+  if (emailEl) emailEl.value = '';
+  if (passwordEl) passwordEl.value = '';
   if (loginNotice) showAuthNotice(loginNotice, '', '');
   if (getCurrentUser()) {
     showPage('homePage');
@@ -1132,12 +1104,20 @@ function showLoginPage() {
 function showRegisterPage() {
   stopChallenge();
   updateAuthHeader();
-  // 每次進入註冊頁都重置表單狀態（隱藏成功區、顯示表單）
+  // 每次進入註冊頁都重置表單狀態（隱藏成功區、顯示表單、清空所有欄位）
   const formEl = document.getElementById('registerForm');
   const successEl = document.getElementById('registerSuccessArea');
   const noticeEl = document.getElementById('registerNotice');
+  const emailEl = document.getElementById('registerEmail');
+  const usernameEl = document.getElementById('registerUsername');
+  const passwordEl = document.getElementById('registerPassword');
+  const confirmEl = document.getElementById('registerConfirm');
   if (formEl) formEl.classList.remove('hidden');
   if (successEl) successEl.classList.add('hidden');
+  if (emailEl) emailEl.value = '';
+  if (usernameEl) usernameEl.value = '';
+  if (passwordEl) passwordEl.value = '';
+  if (confirmEl) confirmEl.value = '';
   if (noticeEl) showAuthNotice(noticeEl, '', '');
   showPage('registerPage');
 }
@@ -1151,10 +1131,10 @@ function requireAuth() {
 
 async function handleLogin(event) {
   if (event) event.preventDefault();
-  const usernameEl = document.getElementById('loginUsername');
+  const emailEl = document.getElementById('loginEmail');
   const passwordEl = document.getElementById('loginPassword');
   const noticeEl = document.getElementById('loginNotice');
-  const username = usernameEl ? usernameEl.value.trim() : '';
+  const email = emailEl ? emailEl.value.trim() : '';
   const password = passwordEl ? passwordEl.value : '';
   if (noticeEl) showAuthNotice(noticeEl, '', '');
 
@@ -1162,24 +1142,29 @@ async function handleLogin(event) {
     showAuthNotice(noticeEl, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
     return;
   }
-  if (!username || !password) {
-    showAuthNotice(noticeEl, '請輸入用戶名稱和密碼。', 'error');
+  if (!email || !password) {
+    showAuthNotice(noticeEl, '請輸入電郵和密碼。', 'error');
     return;
   }
 
   const { data, error } = await sb.auth.signInWithPassword({
-    email: emailFromUsername(username),
+    email: email,
     password: password
   });
 
   if (error || !data.user) {
-    showAuthNotice(noticeEl, '用戶名稱或密碼錯誤。', 'error');
+    let msg = '電郵或密碼錯誤。';
+    const m = (error && error.message ? error.message : '').toLowerCase();
+    if (/confirm|not confirmed|email_not_confirmed|unverified|not verified/.test(m)) {
+      msg = '請先到電郵收件匣確認電郵。';
+    }
+    showAuthNotice(noticeEl, msg, 'error');
     return;
   }
 
   setCurrentUser(data.user);
   await migrateLegacyWrongQuestionsIfAny();
-  if (usernameEl) usernameEl.value = '';
+  if (emailEl) emailEl.value = '';
   if (passwordEl) passwordEl.value = '';
   updateAuthHeader();
   showPage('homePage');
@@ -1187,10 +1172,12 @@ async function handleLogin(event) {
 
 async function handleRegister(event) {
   if (event) event.preventDefault();
+  const emailEl = document.getElementById('registerEmail');
   const usernameEl = document.getElementById('registerUsername');
   const passwordEl = document.getElementById('registerPassword');
   const confirmEl = document.getElementById('registerConfirm');
   const noticeEl = document.getElementById('registerNotice');
+  const email = emailEl ? emailEl.value.trim() : '';
   const username = usernameEl ? usernameEl.value.trim() : '';
   const password = passwordEl ? passwordEl.value : '';
   const confirm = confirmEl ? confirmEl.value : '';
@@ -1198,6 +1185,10 @@ async function handleRegister(event) {
 
   if (!supabaseReady || !sb) {
     showAuthNotice(noticeEl, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+    return;
+  }
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+    showAuthNotice(noticeEl, '請輸入有效嘅電郵地址。', 'error');
     return;
   }
   if (username.length < 1 || username.length > 20) {
@@ -1227,7 +1218,7 @@ async function handleRegister(event) {
     return;
   }
   if (nameRows && nameRows.length > 0) {
-    showAuthNotice(noticeEl, '帳戶已存在（用戶名稱已被使用），請換一個名稱。', 'error');
+    showAuthNotice(noticeEl, '用戶名稱已被使用，請換一個名稱。', 'error');
     return;
   }
 
@@ -1242,7 +1233,7 @@ async function handleRegister(event) {
   const userCode = makeUniqueUserCode(baseCode, takenCodes);
 
   const { data, error } = await sb.auth.signUp({
-    email: emailFromUsername(username),
+    email: email,
     password: password,
     options: {
       data: { username: username, user_code: userCode }
@@ -1250,14 +1241,16 @@ async function handleRegister(event) {
   });
 
   if (error) {
-    let msg = '註冊失敗，請重試。';
     const m = (error.message || '').toLowerCase();
-    if (/already registered|already been registered|exists/.test(m)) {
-      msg = '帳戶已存在（用戶名稱已被使用）。';
+    let msg;
+    if (/already registered|already been registered|already exists|user_already_exists|email.*(exist|registered)|registered.*email/.test(m)) {
+      msg = '此電郵已被註冊。';
     } else if (/duplicate|conflict|unique|user_code/.test(m)) {
       msg = '用戶編碼衝突，請重試。';
+    } else if (/rate.?limit|too many|429/.test(m)) {
+      msg = '嘗試次數過多，請稍後再試（' + (error.message || '') + '）。';
     } else {
-      msg = '註冊失敗：' + error.message;
+      msg = '註冊失敗：' + (error.message || '請重試。');
     }
     showAuthNotice(noticeEl, msg, 'error');
     return;
@@ -1277,13 +1270,13 @@ async function handleRegister(event) {
   updateAuthHeader();
 }
 
-// 註冊成功後前往登入（預填用戶名稱 + 顯示成功提示）
+// 註冊成功後前往登入（預填電郵 + 顯示成功提示）
 function proceedToLogin() {
-  const registerUsernameEl = document.getElementById('registerUsername');
-  const lastUsername = registerUsernameEl ? registerUsernameEl.value : '';
+  const registerEmailEl = document.getElementById('registerEmail');
+  const lastEmail = registerEmailEl ? registerEmailEl.value.trim() : '';
   showLoginPage();
-  const usernameEl = document.getElementById('loginUsername');
-  if (usernameEl) usernameEl.value = lastUsername;
+  const emailEl = document.getElementById('loginEmail');
+  if (emailEl) emailEl.value = lastEmail;
   const noticeEl = document.getElementById('loginNotice');
   if (noticeEl) showAuthNotice(noticeEl, '註冊成功，請使用密碼登入。', 'success');
 }
