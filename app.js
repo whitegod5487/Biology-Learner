@@ -70,6 +70,8 @@ function reasonOf(q, index) {
 
 // ---------- 頁面切換 ----------
 const PAGE_IDS = [
+  'loginPage',
+  'registerPage',
   'homePage',
   'mcPage',
   'practiceListPage',
@@ -92,32 +94,38 @@ function showPage(pageId) {
 }
 
 function goHome() {
+  if (!requireAuth()) return;
   stopChallenge();
   showPage('homePage');
 }
 
 function goToMCPage() {
+  if (!requireAuth()) return;
   stopChallenge();
   showPage('mcPage');
 }
 
 function goToPracticeMode() {
+  if (!requireAuth()) return;
   stopChallenge();
   renderPracticeList();
   showPage('practiceListPage');
 }
 
 function goToChallengeMode() {
+  if (!requireAuth()) return;
   startChallenge();
 }
 
 function goToTechPage() {
+  if (!requireAuth()) return;
   stopChallenge();
   renderTechPage();
   showPage('techPage');
 }
 
 function exitChallenge() {
+  if (!requireAuth()) return;
   stopChallenge();
   showPage('mcPage');
 }
@@ -315,7 +323,7 @@ function renderPracticeQuestion() {
   container.appendChild(opts);
 }
 
-function answerPractice(selected, opts) {
+async function answerPractice(selected, opts) {
   const q = practiceQuestions[practiceIndex];
   const feedback = document.getElementById('practiceFeedback');
   const nextBtn = document.getElementById('practiceNextBtn');
@@ -331,12 +339,12 @@ function answerPractice(selected, opts) {
     feedback.textContent = '正確';
     if (wrongQuizActive) {
       // 錯題重溫：答對即從錯題簿移除（該題「畢業」）
-      const list = loadWrongQuestions();
+      const list = await loadWrongQuestions();
       const idx = list.findIndex(function (r) { return r.q && r.q.q === q.q; });
-      if (idx !== -1) removeWrongQuestion(idx);
+      if (idx !== -1) await removeWrongQuestion(idx);
     }
   } else {
-    saveWrongQuestion(q, selected);
+    await saveWrongQuestion(q, selected);
     const reason = reasonOf(q, selected);
     feedback.className = 'feedback incorrect';
     let msg = '錯誤\n正確答案：' + correctText;
@@ -557,13 +565,13 @@ function stopChallenge() {
   stopChallengeTimer();
 }
 
-function finishChallenge() {
+async function finishChallenge() {
   stopChallenge();
-  renderChallengeAnalysis();
+  await renderChallengeAnalysis();
   showPage('challengeAnalysisPage');
 }
 
-function renderChallengeAnalysis() {
+async function renderChallengeAnalysis() {
   const content = document.getElementById('challengeAnalysisContent');
   content.innerHTML = '';
 
@@ -578,6 +586,8 @@ function renderChallengeAnalysis() {
   summary.className = 'score';
   summary.textContent = '命中率：' + correct + ' / ' + total + '（' + pct + '%）';
   content.appendChild(summary);
+
+  const saves = [];
 
   challengeQuestions.forEach(function (q, idx) {
     const user = challengeAnswers[idx];
@@ -604,7 +614,7 @@ function renderChallengeAnalysis() {
     block.appendChild(userLine);
 
     if (user !== null && user !== q.correct) {
-      saveWrongQuestion(q, user);
+      saves.push(saveWrongQuestion(q, user));
       const reason = reasonOf(q, user);
       if (reason) {
         const reasonLine = document.createElement('p');
@@ -616,62 +626,110 @@ function renderChallengeAnalysis() {
 
     content.appendChild(block);
   });
+
+  // 等候所有錯題儲存完成（不影響已顯示嘅分析內容）
+  await Promise.all(saves);
 }
 
-// ---------- 錯題重溫（錯誤題目儲存 + 重溫作答） ----------
-function loadWrongQuestions() {
+// ---------- 錯題重溫（Supabase 資料表 + 記憶體快取） ----------
+// 錯題以「每用戶」儲存喺 Supabase 嘅 wrong_questions 表（RLS 保護）。
+// 為咗保持介面流暢，載入後會放入記憶體快取（wrongCache），
+// 只有首次載入 / 清除時先會打去伺服器。
+let wrongCache = [];          // 錯題快取：[{ q, wrongIndex }]
+let wrongCacheLoaded = false; // 是否已由 Supabase 載入
+
+function clearWrongCache() {
+  wrongCache = [];
+  wrongCacheLoaded = false;
+}
+
+async function loadWrongQuestions() {
+  const user = getCurrentUser();
+  if (!user || !sb || !supabaseReady) return [];
+  if (wrongCacheLoaded) return wrongCache;
   try {
-    const raw = localStorage.getItem('bioAppWrongQuestions');
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const { data, error } = await sb
+      .from('wrong_questions')
+      .select('*')
+      .eq('user_id', user.id);
+    if (error) return [];
+    wrongCache = (data || []).map(function (row) {
+      return { q: row.question_json, wrongIndex: row.wrong_index };
+    });
+    wrongCacheLoaded = true;
+    return wrongCache;
   } catch (e) {
-    // 讀取不可用時回傳空清單
+    // 讀取失敗時回傳空清單
     return [];
   }
 }
 
-function saveWrongQuestionsList(list) {
+// 以 delete-then-insert 方式整份取代該用戶嘅錯題（最簡單而正確）
+async function saveWrongQuestionsList(list) {
+  const user = getCurrentUser();
+  if (!user || !sb || !supabaseReady) return;
   try {
-    localStorage.setItem('bioAppWrongQuestions', JSON.stringify(list));
+    const { error: delErr } = await sb
+      .from('wrong_questions')
+      .delete()
+      .eq('user_id', user.id);
+    if (delErr) return;
+    if (!list.length) return;
+    const rows = list.map(function (r) {
+      return { user_id: user.id, question_json: r.q, wrong_index: r.wrongIndex };
+    });
+    const { error: insErr } = await sb.from('wrong_questions').insert(rows);
+    if (insErr) return;
   } catch (e) {
-    // 儲存不可用時略過
+    // 儲存失敗時略過
   }
 }
 
-function saveWrongQuestion(q, wrongIndex) {
-  const list = loadWrongQuestions();
-  const exists = list.some(function (r) { return r.q && r.q.q === q.q; });
+async function saveWrongQuestion(q, wrongIndex) {
+  const user = getCurrentUser();
+  if (!user || !sb || !supabaseReady) return;
+  await loadWrongQuestions();
+  const exists = wrongCache.some(function (r) { return r.q && r.q.q === q.q; });
   if (exists) return; // 去重：相同題目文字不重複儲存
-  list.push({ q: q, wrongIndex: wrongIndex });
-  saveWrongQuestionsList(list);
+  wrongCache.push({ q: q, wrongIndex: wrongIndex });
+  await saveWrongQuestionsList(wrongCache);
 }
 
-function removeWrongQuestion(recordIndex) {
-  const list = loadWrongQuestions();
-  if (recordIndex < 0 || recordIndex >= list.length) return;
-  list.splice(recordIndex, 1);
-  saveWrongQuestionsList(list);
+async function removeWrongQuestion(recordIndex) {
+  const user = getCurrentUser();
+  if (!user || !sb || !supabaseReady) return;
+  await loadWrongQuestions();
+  if (recordIndex < 0 || recordIndex >= wrongCache.length) return;
+  wrongCache.splice(recordIndex, 1);
+  await saveWrongQuestionsList(wrongCache);
 }
 
-function clearWrongQuestions() {
-  saveWrongQuestionsList([]);
+async function clearWrongQuestions() {
+  clearWrongCache();
+  const user = getCurrentUser();
+  if (!user || !sb || !supabaseReady) return;
+  try {
+    await sb.from('wrong_questions').delete().eq('user_id', user.id);
+  } catch (e) {
+    // 清除失敗時略過
+  }
 }
 
-function goToWrongPage() {
+async function goToWrongPage() {
+  if (!requireAuth()) return;
   stopChallenge();
-  renderWrongList();
+  await renderWrongList();
   showPage('wrongPage');
 }
 
-function renderWrongList() {
+async function renderWrongList() {
   const container = document.getElementById('wrongList');
   const noticeEl = document.getElementById('wrongNotice');
   if (!container) return;
   if (noticeEl) noticeEl.textContent = '';
   container.innerHTML = '';
 
-  const list = loadWrongQuestions();
+  const list = await loadWrongQuestions();
   if (!list.length) {
     const p = document.createElement('p');
     p.className = 'notice';
@@ -716,8 +774,8 @@ function renderWrongList() {
     const removeBtn = document.createElement('button');
     removeBtn.className = 'btn btn-neutral';
     removeBtn.textContent = '移除';
-    removeBtn.onclick = function () {
-      removeWrongQuestion(i);
+    removeBtn.onclick = async function () {
+      await removeWrongQuestion(i);
       renderWrongList();
     };
     item.appendChild(removeBtn);
@@ -726,18 +784,18 @@ function renderWrongList() {
   });
 }
 
-function clearWrongList() {
-  clearWrongQuestions();
-  renderWrongList();
+async function clearWrongList() {
+  await clearWrongQuestions();
+  await renderWrongList();
   const noticeEl = document.getElementById('wrongNotice');
   if (noticeEl) noticeEl.textContent = '已清空全部錯題。';
 }
 
-function startWrongQuiz() {
+async function startWrongQuiz() {
   const noticeEl = document.getElementById('wrongNotice');
   if (noticeEl) noticeEl.textContent = '';
 
-  const list = loadWrongQuestions();
+  const list = await loadWrongQuestions();
   const qs = list.map(function (r) { return r.q; }).filter(Boolean);
   if (!qs.length) {
     if (noticeEl) noticeEl.textContent = '尚未儲存任何錯題，請先作答並儲存錯題。';
@@ -900,6 +958,431 @@ function buildTechMcq(mcq, mi) {
   return block;
 }
 
+// ---------- 帳戶 / 登入系統（Supabase 後端） ----------
+// 本程式改用 Supabase 作後端：
+//   - 密碼由 Supabase 於伺服器端以 bcrypt 雜湊及驗證，絕不儲存或傳送明文密碼。
+//   - 帳戶資料（profiles）與每用戶錯題（wrong_questions）均由 RLS 保護。
+//   - 登入仍然使用「用戶名稱 + 密碼」；電子郵件僅為內部產生的合成電郵，並非真實電郵。
+//   - 主題設定（bioAppTheme）維持儲存於 localStorage（全局設定，屬預期行為）。
+
+let currentUser = null;          // 目前登入的 Supabase user 物件
+let supabaseReady = false;       // Supabase SDK / 專案資料是否已就緒
+
+// 建立 Supabase 客戶端（僅在 SDK 已載入且 supabaseConfig.js 已填上專案資料時）
+let sb = null;
+if (typeof supabase !== 'undefined' &&
+    typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL &&
+    typeof SUPABASE_ANON_KEY !== 'undefined' && SUPABASE_ANON_KEY) {
+  try {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseReady = true;
+  } catch (e) {
+    sb = null;
+    supabaseReady = false;
+  }
+}
+
+// 內部合成電郵用嘅 8 位十六進位確定性雜湊（djb2 變體，>>> 0 保證無符號）
+function hashEmailLocal(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+// 產生內部用合成電郵（僅供 Supabase 帳戶識別，並非真實電郵）
+// 每個用戶名稱都對應一個確定性且唯一的地址：
+//   英文 / 數字保留，中文 → '_' + 十六進位碼位，空格 → '_'；
+//   截斷至 60 字元，再附加 '_' + 8 位雜湊（用完整 trim 後嘅用戶名稱計算）
+function emailFromUsername(username) {
+  const trimmed = String(username || '').trim();
+  const lower = trimmed.toLowerCase();
+  let local = '';
+  for (const ch of lower) {
+    const code = ch.charCodeAt(0);
+    if ((code >= 0x61 && code <= 0x7a) || (code >= 0x30 && code <= 0x39)) {
+      local += ch;
+    } else if (ch === ' ') {
+      local += '_';
+    } else {
+      local += '_' + code.toString(16);
+    }
+  }
+  if (local.length > 60) local = local.slice(0, 60);
+  local = local + '_' + hashEmailLocal(trimmed);
+  return local + '@local.bioapp';
+}
+
+function getCurrentUser() {
+  return currentUser;
+}
+
+function setCurrentUser(u) {
+  currentUser = u || null;
+  updateAuthHeader();
+}
+
+function clearCurrentUser() {
+  currentUser = null;
+  updateAuthHeader();
+}
+
+// ---------- 用戶代碼字典（generateUserCode 用） ----------
+// 英文字母（不分大小寫）：A/a → '01'、B/b → '02' ... Z/z → '26'（字母序 + 1，補零 2 位）
+// 數字：0 → '27'、1 → '28' ... 9 → '36'（數字 + 27，補零 2 位）
+// 中文字（\u4E00–\u9FFF）：以「字典延伸」方式產生：(字元碼 - 0x4E00) + 100
+// 空格與不支援的字元會被略過。
+const USER_CODE_DICT = (function () {
+  const dict = {};
+  for (let i = 0; i < 26; i++) {
+    const code = pad(i + 1); // '01' ... '26'
+    dict[String.fromCharCode(65 + i)] = code; // A-Z
+    dict[String.fromCharCode(97 + i)] = code; // a-z
+  }
+  for (let d = 0; d <= 9; d++) {
+    dict[String(d)] = pad(d + 27); // '27' ... '36'
+  }
+  return dict;
+})();
+
+function isZhChar(ch) {
+  const c = ch.charCodeAt(0);
+  return c >= 0x4E00 && c <= 0x9FFF;
+}
+
+function generateUserCode(username) {
+  let code = '';
+  for (const ch of String(username)) {
+    if (USER_CODE_DICT[ch]) {
+      code += USER_CODE_DICT[ch];
+    } else if (isZhChar(ch)) {
+      // 字典延伸：以 (charCode - 0x4E00) + 100 表示中文字
+      code += String((ch.charCodeAt(0) - 0x4E00) + 100);
+    }
+    // 其餘字元（含空格）略過
+  }
+  return code;
+}
+
+// 確保 userCode 唯一：若基底碼已被使用，追加 '-01'、'-02'... 直到唯一
+// existingCodes 可為字串陣列（Supabase profiles 嘅 user_code），或含 userCode 之物件陣列
+function makeUniqueUserCode(baseCode, existingCodes) {
+  const taken = (existingCodes || []).map(function (u) {
+    return (typeof u === 'string') ? u : (u && u.userCode);
+  }).filter(Boolean);
+  if (taken.indexOf(baseCode) === -1) return baseCode;
+  for (let i = 1; i <= 999; i++) {
+    const candidate = baseCode + '-' + pad(i);
+    if (taken.indexOf(candidate) === -1) return candidate;
+  }
+  // 理論上不會走到這裡，保險起見追加隨機兩位數字
+  for (let i = 0; i < 100; i++) {
+    const n = Math.floor(Math.random() * 100);
+    const candidate = baseCode + '-' + pad(n);
+    if (taken.indexOf(candidate) === -1) return candidate;
+  }
+  return baseCode + '-' + Date.now().toString().slice(-4);
+}
+
+function showAuthNotice(el, message, type) {
+  if (!el) return;
+  if (type === 'error') el.className = 'auth-notice auth-error';
+  else if (type === 'success') el.className = 'auth-notice auth-success';
+  else el.className = 'auth-notice';
+  el.textContent = message;
+}
+
+// 更新頁首的用戶名稱 / 用戶代碼 / 登出按鈕
+function updateAuthHeader() {
+  const userArea = document.getElementById('userArea');
+  const nameEl = document.getElementById('currentUserName');
+  const codeEl = document.getElementById('currentUserCode');
+  if (!userArea || !nameEl || !codeEl) return;
+  const user = getCurrentUser();
+  if (!user) {
+    userArea.classList.add('hidden');
+    nameEl.textContent = '—';
+    codeEl.textContent = '—';
+    return;
+  }
+  const meta = user.user_metadata || {};
+  userArea.classList.remove('hidden');
+  nameEl.textContent = meta.username || '—';
+  codeEl.textContent = meta.user_code || '—';
+}
+
+function showLoginPage() {
+  stopChallenge();
+  updateAuthHeader();
+  // 重置登入頁提示（proceedToLogin 會喺呼叫後再顯示成功提示）
+  const loginNotice = document.getElementById('loginNotice');
+  if (loginNotice) showAuthNotice(loginNotice, '', '');
+  if (getCurrentUser()) {
+    showPage('homePage');
+    return;
+  }
+  // 若未設定 Supabase，顯示設定提示
+  if (!supabaseReady && loginNotice) {
+    showAuthNotice(loginNotice, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+  }
+  showPage('loginPage');
+}
+
+function showRegisterPage() {
+  stopChallenge();
+  updateAuthHeader();
+  // 每次進入註冊頁都重置表單狀態（隱藏成功區、顯示表單）
+  const formEl = document.getElementById('registerForm');
+  const successEl = document.getElementById('registerSuccessArea');
+  const noticeEl = document.getElementById('registerNotice');
+  if (formEl) formEl.classList.remove('hidden');
+  if (successEl) successEl.classList.add('hidden');
+  if (noticeEl) showAuthNotice(noticeEl, '', '');
+  showPage('registerPage');
+}
+
+// 登入門檻：未登入時所有頁面導覽一律導向登入頁
+function requireAuth() {
+  if (getCurrentUser()) return true;
+  showLoginPage();
+  return false;
+}
+
+async function handleLogin(event) {
+  if (event) event.preventDefault();
+  const usernameEl = document.getElementById('loginUsername');
+  const passwordEl = document.getElementById('loginPassword');
+  const noticeEl = document.getElementById('loginNotice');
+  const username = usernameEl ? usernameEl.value.trim() : '';
+  const password = passwordEl ? passwordEl.value : '';
+  if (noticeEl) showAuthNotice(noticeEl, '', '');
+
+  if (!supabaseReady || !sb) {
+    showAuthNotice(noticeEl, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+    return;
+  }
+  if (!username || !password) {
+    showAuthNotice(noticeEl, '請輸入用戶名稱和密碼。', 'error');
+    return;
+  }
+
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: emailFromUsername(username),
+    password: password
+  });
+
+  if (error || !data.user) {
+    showAuthNotice(noticeEl, '用戶名稱或密碼錯誤。', 'error');
+    return;
+  }
+
+  setCurrentUser(data.user);
+  await migrateLegacyWrongQuestionsIfAny();
+  if (usernameEl) usernameEl.value = '';
+  if (passwordEl) passwordEl.value = '';
+  updateAuthHeader();
+  showPage('homePage');
+}
+
+async function handleRegister(event) {
+  if (event) event.preventDefault();
+  const usernameEl = document.getElementById('registerUsername');
+  const passwordEl = document.getElementById('registerPassword');
+  const confirmEl = document.getElementById('registerConfirm');
+  const noticeEl = document.getElementById('registerNotice');
+  const username = usernameEl ? usernameEl.value.trim() : '';
+  const password = passwordEl ? passwordEl.value : '';
+  const confirm = confirmEl ? confirmEl.value : '';
+  if (noticeEl) showAuthNotice(noticeEl, '', '');
+
+  if (!supabaseReady || !sb) {
+    showAuthNotice(noticeEl, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+    return;
+  }
+  if (username.length < 1 || username.length > 20) {
+    showAuthNotice(noticeEl, '用戶名稱長度須為 1–20 個字元。', 'error');
+    return;
+  }
+  if (!/^[a-zA-Z0-9\u4E00-\u9FFF ]+$/.test(username)) {
+    showAuthNotice(noticeEl, '用戶名稱只能包含中文字、英文字母、數字和空格。', 'error');
+    return;
+  }
+  if (password.length < 6) {
+    showAuthNotice(noticeEl, '密碼至少需要 6 個字元。', 'error');
+    return;
+  }
+  if (password !== confirm) {
+    showAuthNotice(noticeEl, '兩次輸入的密碼不一致。', 'error');
+    return;
+  }
+
+  // 檢查用戶名稱是否已被使用（不分大小寫）
+  const { data: nameRows, error: nameErr } = await sb
+    .from('profiles')
+    .select('username')
+    .ilike('username', username);
+  if (nameErr) {
+    showAuthNotice(noticeEl, '伺服器連線失敗，請稍後再試。', 'error');
+    return;
+  }
+  if (nameRows && nameRows.length > 0) {
+    showAuthNotice(noticeEl, '帳戶已存在（用戶名稱已被使用），請換一個名稱。', 'error');
+    return;
+  }
+
+  // 取得現有 user_code 清單，避免用戶編碼衝突
+  const { data: codeRows, error: codeErr } = await sb.from('profiles').select('user_code');
+  if (codeErr) {
+    showAuthNotice(noticeEl, '伺服器連線失敗，請稍後再試。', 'error');
+    return;
+  }
+  const takenCodes = (codeRows || []).map(function (r) { return r.user_code; });
+  const baseCode = generateUserCode(username);
+  const userCode = makeUniqueUserCode(baseCode, takenCodes);
+
+  const { data, error } = await sb.auth.signUp({
+    email: emailFromUsername(username),
+    password: password,
+    options: {
+      data: { username: username, user_code: userCode }
+    }
+  });
+
+  if (error) {
+    let msg = '註冊失敗，請重試。';
+    const m = (error.message || '').toLowerCase();
+    if (/already registered|already been registered|exists/.test(m)) {
+      msg = '帳戶已存在（用戶名稱已被使用）。';
+    } else if (/duplicate|conflict|unique|user_code/.test(m)) {
+      msg = '用戶編碼衝突，請重試。';
+    } else {
+      msg = '註冊失敗：' + error.message;
+    }
+    showAuthNotice(noticeEl, msg, 'error');
+    return;
+  }
+
+  // 顯示生成的用戶代碼（清楚標示）
+  const codeEl = document.getElementById('registerUserCode');
+  if (codeEl) codeEl.textContent = userCode;
+  const formEl = document.getElementById('registerForm');
+  const successEl = document.getElementById('registerSuccessArea');
+  if (formEl) formEl.classList.add('hidden');
+  if (successEl) successEl.classList.remove('hidden');
+  // 若關閉咗 email 驗證，signUp 會直接建立 session；此時視為已登入
+  if (data.session && data.user) {
+    setCurrentUser(data.user);
+  }
+  updateAuthHeader();
+}
+
+// 註冊成功後前往登入（預填用戶名稱 + 顯示成功提示）
+function proceedToLogin() {
+  const registerUsernameEl = document.getElementById('registerUsername');
+  const lastUsername = registerUsernameEl ? registerUsernameEl.value : '';
+  showLoginPage();
+  const usernameEl = document.getElementById('loginUsername');
+  if (usernameEl) usernameEl.value = lastUsername;
+  const noticeEl = document.getElementById('loginNotice');
+  if (noticeEl) showAuthNotice(noticeEl, '註冊成功，請使用密碼登入。', 'success');
+}
+
+async function logout() {
+  if (!getCurrentUser()) {
+    showLoginPage();
+    return;
+  }
+  if (!window.confirm('確定要登出嗎？')) return;
+  stopChallenge();
+  if (supabaseReady && sb) {
+    try {
+      await sb.auth.signOut();
+    } catch (e) {
+      // 登出失敗亦繼續本地清除
+    }
+  }
+  clearWrongCache();
+  clearCurrentUser();
+  updateAuthHeader();
+  showPage('loginPage');
+}
+
+// 首次登入後，遷移舊版 localStorage 錯題資料到 Supabase
+// （主要：舊版全域 key 'bioAppWrongQuestions'；次要：每用戶 key 'bioAppWrongQuestions_<username>'）
+async function migrateLegacyWrongQuestionsIfAny() {
+  const user = getCurrentUser();
+  if (!user || !sb || !supabaseReady) return;
+  try {
+    let legacyList = null;
+    const raw = localStorage.getItem('bioAppWrongQuestions');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) legacyList = parsed;
+    }
+    if (!legacyList) {
+      const username = (user.user_metadata && user.user_metadata.username) || '';
+      if (username) {
+        const raw2 = localStorage.getItem('bioAppWrongQuestions_' + username);
+        if (raw2) {
+          const parsed2 = JSON.parse(raw2);
+          if (Array.isArray(parsed2) && parsed2.length) legacyList = parsed2;
+        }
+      }
+    }
+    if (!legacyList) return;
+
+    const existing = await loadWrongQuestions();
+    const existingQs = {};
+    existing.forEach(function (r) { if (r.q && r.q.q) existingQs[r.q.q] = true; });
+    const rows = legacyList
+      .filter(function (r) { return r && r.q && r.q.q && !existingQs[r.q.q]; })
+      .map(function (r) {
+        return { user_id: user.id, question_json: r.q, wrong_index: r.wrongIndex };
+      });
+    if (rows.length) {
+      const { error } = await sb.from('wrong_questions').insert(rows);
+      if (error) return;
+    }
+    // 移除舊鍵，避免重複遷移
+    localStorage.removeItem('bioAppWrongQuestions');
+    const username = (user.user_metadata && user.user_metadata.username) || '';
+    if (username) localStorage.removeItem('bioAppWrongQuestions_' + username);
+    clearWrongCache(); // 重設快取，令下次載入包含新匯入資料
+  } catch (e) {
+    // 遷移失敗時略過（不影響登入）
+  }
+}
+
+// 初始化登入狀態：檢查 Supabase session
+async function initAuth() {
+  if (!supabaseReady || !sb) {
+    updateAuthHeader();
+    showPage('loginPage');
+    const noticeEl = document.getElementById('loginNotice');
+    if (noticeEl) showAuthNotice(noticeEl, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+    return;
+  }
+  try {
+    const { data: sessionData } = await sb.auth.getSession();
+    const session = sessionData && sessionData.session;
+    if (session && session.user) {
+      setCurrentUser(session.user);
+      await loadWrongQuestions(); // 預先載入錯題快取
+      updateAuthHeader();
+      showPage('homePage');
+    } else {
+      setCurrentUser(null);
+      updateAuthHeader();
+      showPage('loginPage');
+    }
+  } catch (e) {
+    setCurrentUser(null);
+    updateAuthHeader();
+    showPage('loginPage');
+  }
+}
+
 // ---------- 主題切換 ----------
 // 各主題對應的按鈕圖示與提示文字
 var THEME_META = {
@@ -953,4 +1436,5 @@ function initTheme() {
 
 // ---------- 初始化 ----------
 initTheme();
-showPage('homePage');
+updateAuthHeader();
+initAuth(); // 非同步：檢查登入狀態並載入錯題快取（未設定 Supabase 時會顯示設定提示）

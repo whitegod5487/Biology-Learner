@@ -491,17 +491,244 @@
       flex-wrap: wrap;
       gap: 10px;
     }
+
+    /* ---------- 登入 / 註冊 ---------- */
+    .auth-wrap {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 24px;
+    }
+
+    .auth-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .auth-card h2 { margin-top: 0; }
+
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .auth-label {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .auth-input {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 15px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--option-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.12s, box-shadow 0.12s;
+    }
+
+    .auth-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+    }
+
+    .auth-notice {
+      min-height: 1.4em;
+      margin: 2px 0;
+      font-size: 14px;
+      white-space: pre-line;
+    }
+
+    .auth-error { color: var(--wrong-text); }
+    .auth-success { color: var(--correct-text); }
+
+    .auth-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .auth-actions .btn { width: 100%; }
+
+    .auth-switch {
+      text-align: center;
+      margin: 16px 0 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .auth-link-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--accent);
+      font: inherit;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .auth-link-btn:hover { color: var(--accent-dark); }
+
+    .auth-code-area {
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px dashed var(--accent);
+      background: var(--option-selected-bg);
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .auth-code-box {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--accent);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin: 8px 0;
+      word-break: break-all;
+    }
+
+    .auth-hint {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 4px 0;
+    }
+
+    /* ---------- 頁首用戶區域 ---------- */
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .user-area {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      padding: 4px 6px 4px 12px;
+    }
+
+    .user-area.hidden { display: none !important; }
+
+    .user-chip {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .user-code-chip {
+      color: #fff;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.18);
+      border-radius: 999px;
+      padding: 2px 8px;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .logout-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .logout-btn:hover { background: var(--accent-dark); }
   </style>
 </head>
 <body>
   <header class="app-header">
     <h1 onclick="goHome()">生物溫習程式</h1>
-    <div class="theme-toggle">
-      <button type="button" id="themeCycleBtn" class="theme-btn" title="目前主題：淺色（點擊切換）" onclick="cycleTheme()">☀️</button>
+    <div class="header-right">
+      <div id="userArea" class="user-area hidden">
+        <span id="currentUserName" class="user-chip">—</span>
+        <span id="currentUserCode" class="user-code-chip">—</span>
+        <button type="button" id="logoutBtn" class="logout-btn" onclick="logout()">登出</button>
+      </div>
+      <div class="theme-toggle">
+        <button type="button" id="themeCycleBtn" class="theme-btn" title="目前主題：淺色（點擊切換）" onclick="cycleTheme()">☀️</button>
+      </div>
     </div>
   </header>
 
   <div class="container">
+
+    <!-- 登入頁面 -->
+    <section id="loginPage" class="page hidden">
+      <div class="auth-wrap">
+        <div class="auth-card">
+          <h2 class="page-title">登入</h2>
+          <p class="sub">請登入以使用生物溫習程式</p>
+          <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)" novalidate>
+            <label class="auth-label" for="loginUsername">用戶名稱</label>
+            <input type="text" id="loginUsername" class="auth-input" maxlength="20" autocomplete="username" placeholder="請輸入用戶名稱">
+            <label class="auth-label" for="loginPassword">密碼</label>
+            <input type="password" id="loginPassword" class="auth-input" autocomplete="current-password" placeholder="請輸入密碼">
+            <p id="loginNotice" class="auth-notice"></p>
+            <div class="auth-actions">
+              <button type="submit" class="btn btn-primary">登入</button>
+            </div>
+          </form>
+          <p class="auth-switch">還沒有帳戶？<button type="button" class="auth-link-btn" onclick="showRegisterPage()">註冊新帳戶</button></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 註冊頁面 -->
+    <section id="registerPage" class="page hidden">
+      <div class="auth-wrap">
+        <div class="auth-card">
+          <h2 class="page-title">註冊新帳戶</h2>
+          <form id="registerForm" class="auth-form" onsubmit="handleRegister(event)" novalidate>
+            <label class="auth-label" for="registerUsername">用戶名稱（1–20 字元：中文字、英文字母、數字、空格）</label>
+            <input type="text" id="registerUsername" class="auth-input" maxlength="20" autocomplete="username" placeholder="例如：小明 或 Bob123">
+            <label class="auth-label" for="registerPassword">密碼（至少 6 個字元）</label>
+            <input type="password" id="registerPassword" class="auth-input" autocomplete="new-password" placeholder="請輸入密碼">
+            <label class="auth-label" for="registerConfirm">確認密碼</label>
+            <input type="password" id="registerConfirm" class="auth-input" autocomplete="new-password" placeholder="再次輸入密碼">
+            <p id="registerNotice" class="auth-notice"></p>
+            <div class="auth-actions">
+              <button type="submit" class="btn btn-primary">註冊</button>
+            </div>
+          </form>
+          <div id="registerSuccessArea" class="auth-code-area hidden">
+            <p class="auth-success-text">註冊成功！你的用戶代碼：</p>
+            <div id="registerUserCode" class="auth-code-box"></div>
+            <p class="auth-hint">請記下此代碼（登入後亦會顯示於頁首）。</p>
+            <button type="button" class="btn btn-success" onclick="proceedToLogin()">前往登入</button>
+          </div>
+          <p class="auth-switch">已有帳戶？<button type="button" class="auth-link-btn" onclick="showLoginPage()">返回登入</button></p>
+        </div>
+      </div>
+    </section>
 
     <!-- 主頁 -->
     <section id="homePage" class="page">
@@ -625,11 +852,15 @@
 
   </div>
 
+  <!-- Supabase JS SDK（CDN，純靜態友好） -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="topics.js"></script>
   <script src="questionBank1.js"></script>
   <script src="questionBank2.js"></script>
   <script src="questionBank3.js"></script>
   <script src="frontierTech.js"></script>
+  <!-- Supabase 專案設定（請先喺 supabaseConfig.js 填上 SUPABASE_URL 同 SUPABASE_ANON_KEY） -->
+  <script src="supabaseConfig.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
