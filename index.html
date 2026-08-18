@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>生物溫習程式</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20x='6'%20y='6'%20width='88'%20height='88'%20rx='18'%20fill='%23a5d6a7'%20stroke='%232c6e49'%20stroke-width='5'/%3E%3Crect%20x='14'%20y='14'%20width='72'%20height='72'%20rx='12'%20fill='%23c8e6c9'%20stroke='%234caf50'%20stroke-width='1.5'/%3E%3Cellipse%20cx='50'%20cy='52'%20rx='26'%20ry='24'%20fill='%23e8f5e9'%20stroke='%2381c784'%20stroke-width='2'/%3E%3Ccircle%20cx='50'%20cy='52'%20r='6'%20fill='%232c6e49'/%3E%3Cellipse%20cx='26'%20cy='30'%20rx='7'%20ry='4'%20fill='%234caf50'/%3E%3Cellipse%20cx='72'%20cy='26'%20rx='7'%20ry='4'%20fill='%234caf50'/%3E%3Cellipse%20cx='30'%20cy='74'%20rx='7'%20ry='4'%20fill='%234caf50'/%3E%3Cellipse%20cx='72'%20cy='70'%20rx='7'%20ry='4'%20fill='%234caf50'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --primary: #2c6e49;
+      --primary-dark: #245a3d;
+      --accent: #1f6feb;
+      --accent-dark: #1a5cc4;
+      --bg: #f4f6f8;
+      --card-bg: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --correct-bg: #e8f7ee;
+      --correct-text: #1e7e34;
+      --wrong-bg: #fdeceb;
+      --wrong-text: #c0392b;
+      --option-bg: #fafbfc;
+      --option-hover-bg: #eef2f7;
+      --option-selected-bg: #e8f0fe;
+      --mcq-bg: #fafbfc;
+      --notice-bg: #fff8e1;
+      --notice-border: #f1e3a8;
+      --timer-bar-bg: #e2e8f0;
+      --neutral: #64748b;
+      --neutral-dark: #475569;
+      --tech-concept: #374151;
+    }
+
+    /* 深色模式（data-theme="dark"） */
+    [data-theme="dark"] {
+      --primary: #3d8f63;
+      --primary-dark: #327a53;
+      --accent: #5b9cf5;
+      --accent-dark: #4b87e0;
+      --bg: #111827;
+      --card-bg: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: #374151;
+      --correct-bg: #13351f;
+      --correct-text: #4ade80;
+      --wrong-bg: #3b1417;
+      --wrong-text: #f87171;
+      --option-bg: #1f2937;
+      --option-hover-bg: #293548;
+      --option-selected-bg: #1e3a5f;
+      --mcq-bg: #1b2430;
+      --notice-bg: #3a2f14;
+      --notice-border: #6b5a26;
+      --timer-bar-bg: #374151;
+      --neutral: #64748b;
+      --neutral-dark: #475569;
+      --tech-concept: #d1d5db;
+    }
+
+    /* 暖色模式（data-theme="warm"） */
+    [data-theme="warm"] {
+      --primary: #c9772f;
+      --primary-dark: #a96324;
+      --accent: #e0703f;
+      --accent-dark: #c75f34;
+      --bg: #fdf1e1;
+      --card-bg: #fffaf2;
+      --text: #4a3728;
+      --muted: #8a6d55;
+      --border: #ecd7b8;
+      --correct-bg: #eaf5dc;
+      --correct-text: #4d7c0f;
+      --wrong-bg: #fde8e3;
+      --wrong-text: #c0392b;
+      --option-bg: #fff6ea;
+      --option-hover-bg: #f9e8d0;
+      --option-selected-bg: #fde3c8;
+      --mcq-bg: #fff6ea;
+      --notice-bg: #fdf0cf;
+      --notice-border: #e8cd8f;
+      --timer-bar-bg: #efdfc6;
+      --neutral: #b0763c;
+      --neutral-dark: #99622f;
+      --tech-concept: #5c4635;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Microsoft JhengHei", "Noto Sans TC", "PingFang TC", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      background: var(--primary);
+      color: #fff;
+      padding: 14px 20px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .app-header h1 {
+      margin: 0;
+      font-size: 20px;
+      cursor: pointer;
+      display: inline-block;
+      user-select: none;
+    }
+
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .theme-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: #fff;
+      font-size: 16px;
+      line-height: 1;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    }
+
+    .theme-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: rgba(255, 255, 255, 0.6);
+    }
+
+    .theme-btn:active {
+      background: rgba(255, 255, 255, 0.28);
+      transform: scale(0.96);
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 20px 16px 48px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      margin: 8px 0 16px;
+    }
+
+    .sub {
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+
+    .meta {
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+
+    .hidden { display: none !important; }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .big-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+
+    .big-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+      border-color: var(--accent);
+    }
+
+    .big-card .icon {
+      font-size: 34px;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    .topic-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .topic-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .topic-no {
+      flex: 0 0 auto;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 8px;
+      font-weight: 700;
+    }
+
+    .topic-name {
+      flex: 1 1 auto;
+      font-weight: 600;
+    }
+
+    .practice-switch {
+      display: inline-flex;
+      gap: 4px;
+      background: var(--neutral);
+      border-radius: 10px;
+      padding: 4px;
+      margin: 12px 0 4px;
+    }
+
+    .practice-switch-btn {
+      border: none;
+      background: transparent;
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      font-family: inherit;
+    }
+
+    .practice-switch-btn.active {
+      background: var(--accent);
+      font-weight: 600;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      font-family: inherit;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-dark); }
+    .btn-success { background: var(--primary); color: #fff; }
+    .btn-success:hover { background: var(--primary-dark); }
+    .btn-neutral { background: var(--neutral); color: #fff; }
+    .btn-neutral:hover { background: var(--neutral-dark); }
+    .btn-source { background: #7c3aed; color: #fff; }
+    .btn-source:hover { background: #6d28d9; }
+    .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+    .question-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-top: 14px;
+    }
+
+    .question-text {
+      white-space: pre-line;
+      font-size: 17px;
+      font-weight: 600;
+      margin: 0 0 12px;
+    }
+
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .option-btn {
+      text-align: left;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--option-bg);
+      cursor: pointer;
+      font-size: 15px;
+      font-family: inherit;
+      color: var(--text);
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .option-btn:hover:not(:disabled) {
+      background: var(--option-hover-bg);
+      border-color: var(--accent);
+    }
+
+    .option-btn:disabled {
+      cursor: default;
+      opacity: 0.85;
+    }
+
+    .option-btn.selected,
+    .option-btn.selected:hover:not(:disabled) {
+      background: var(--option-selected-bg);
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .feedback {
+      white-space: pre-line;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    .feedback.correct { background: var(--correct-bg); color: var(--correct-text); }
+    .feedback.incorrect { background: var(--wrong-bg); color: var(--wrong-text); }
+
+    .analysis-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-top: 14px;
+    }
+
+    .score {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 6px 0;
+    }
+
+    .review-item {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 0;
+    }
+
+    .review-item:last-child { border-bottom: none; }
+    .review-q { font-weight: 600; }
+    .review-reason { color: var(--wrong-text); }
+
+    .timer-wrap { margin-top: 10px; }
+    .timer-bar-bg {
+      width: 100%;
+      height: 12px;
+      background: var(--timer-bar-bg);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .timer-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #27ae60, #2ecc71);
+      width: 100%;
+      transition: width 1s linear;
+    }
+    .timer-text {
+      margin-top: 6px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .tech-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+      margin-top: 16px;
+    }
+
+    @media (min-width: 720px) {
+      .tech-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    .tech-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .tech-card h2 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      color: var(--primary);
+    }
+
+    .tech-subtitle {
+      color: var(--muted);
+      margin: 0 0 12px;
+    }
+
+    .tech-dse {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .badge {
+      background: #e67e22;
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .related-list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .tech-card h3 {
+      margin: 16px 0 6px;
+      font-size: 16px;
+      border-left: 4px solid var(--accent);
+      padding-left: 8px;
+    }
+
+    .bullet-list {
+      margin: 6px 0;
+      padding-left: 20px;
+    }
+
+    .bullet-list li { margin-bottom: 4px; }
+
+    .tech-concept { color: var(--tech-concept); }
+
+    .mcq {
+      background: var(--mcq-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+
+    .mcq-q {
+      font-weight: 600;
+      white-space: pre-line;
+      margin: 0 0 8px;
+    }
+
+    .notice {
+      color: var(--muted);
+      background: var(--notice-bg);
+      border: 1px solid var(--notice-border);
+      padding: 10px 12px;
+      border-radius: 8px;
+    }
+
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1 onclick="goHome()">生物溫習程式</h1>
+    <div class="theme-toggle">
+      <button type="button" id="themeCycleBtn" class="theme-btn" title="目前主題：淺色（點擊切換）" onclick="cycleTheme()">☀️</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- 主頁 -->
+    <section id="homePage" class="page">
+      <h2 class="page-title">主頁</h2>
+      <div class="card-grid">
+        <div class="big-card" onclick="goToMCPage()">
+          <span class="icon">📝</span>多項選擇題
+        </div>
+        <div class="big-card" onclick="goToTechPage()">
+          <span class="icon">🔬</span>學習前沿科技
+        </div>
+        <div class="big-card" onclick="goToWrongPage()">
+          <span class="icon">📚</span>錯題重溫
+        </div>
+      </div>
+    </section>
+
+    <!-- 多項選擇題頁面 -->
+    <section id="mcPage" class="page hidden">
+      <h2 class="page-title">多項選擇題</h2>
+      <div class="card-grid">
+        <div class="big-card" onclick="goToPracticeMode()">
+          <span class="icon">✏️</span>練習模式
+        </div>
+        <div class="big-card" onclick="goToChallengeMode()">
+          <span class="icon">⏱️</span>挑戰模式
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-neutral" onclick="goHome()">返回主頁</button>
+      </div>
+    </section>
+
+    <!-- 練習模式：課題列表（按課題 / 按課本） -->
+    <section id="practiceListPage" class="page hidden">
+      <h2 class="page-title">練習模式</h2>
+      <p class="sub">按課題（每課題 20 題）或按課本（整冊）練習</p>
+      <div id="practiceSwitch" class="practice-switch" role="group" aria-label="練習列表切換">
+        <button class="practice-switch-btn active" data-mode="topic" onclick="setPracticeListMode('topic')">按課題</button>
+        <button class="practice-switch-btn" data-mode="book" onclick="setPracticeListMode('book')">按課本</button>
+      </div>
+      <p id="practiceListNotice"></p>
+      <div id="practiceTopicList" class="topic-list"></div>
+      <div id="practiceBookList" class="topic-list"></div>
+      <div class="actions">
+        <button class="btn btn-neutral" onclick="goToMCPage()">返回多項選擇題</button>
+      </div>
+    </section>
+
+    <!-- 練習模式：作答 -->
+    <section id="practiceQuizPage" class="page hidden">
+      <h2 class="page-title">練習模式</h2>
+      <p id="practiceMeta" class="meta"></p>
+      <div id="practiceQuestionContainer" class="question-card"></div>
+      <p id="practiceFeedback" class="feedback"></p>
+      <div class="actions">
+        <button id="practiceNextBtn" class="btn btn-primary hidden" onclick="nextPractice()">下一題</button>
+        <button id="practiceAnalysisBtn" class="btn btn-success hidden" onclick="showPracticeAnalysis()">進入分析頁</button>
+        <button class="btn btn-neutral" onclick="goToPracticeMode()">返回課題列表</button>
+      </div>
+    </section>
+
+    <!-- 練習模式：分析頁 -->
+    <section id="practiceAnalysisPage" class="page hidden">
+      <h2 class="page-title">練習分析</h2>
+      <div id="practiceAnalysisContent" class="analysis-card"></div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+      </div>
+    </section>
+
+    <!-- 挑戰模式：作答 -->
+    <section id="challengePage" class="page hidden">
+      <h2 class="page-title">挑戰模式</h2>
+      <div id="challengeTimerWrap" class="timer-wrap">
+        <div class="timer-bar-bg">
+          <div id="challengeTimerBar" class="timer-bar"></div>
+        </div>
+        <p id="challengeTimerText" class="timer-text">剩餘時間：40:00</p>
+      </div>
+      <p id="challengeNotice"></p>
+      <div id="challengeQuestionContainer" class="question-card"></div>
+      <div class="actions">
+        <button id="challengePrevBtn" class="btn btn-neutral" onclick="prevChallenge()">上一題</button>
+        <button id="challengeNextBtn" class="btn btn-primary hidden" onclick="nextChallenge()">下一題</button>
+        <button id="challengeFinishBtn" class="btn btn-success hidden" onclick="finishChallenge()">完成</button>
+        <button class="btn btn-neutral" onclick="exitChallenge()">退出挑戰模式</button>
+      </div>
+    </section>
+
+    <!-- 挑戰模式：分析頁 -->
+    <section id="challengeAnalysisPage" class="page hidden">
+      <h2 class="page-title">挑戰分析</h2>
+      <div id="challengeAnalysisContent" class="analysis-card"></div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+      </div>
+    </section>
+
+    <!-- 錯題重溫 -->
+    <section id="wrongPage" class="page hidden">
+      <h2 class="page-title">錯題重溫</h2>
+      <p id="wrongNotice"></p>
+      <div id="wrongList" class="analysis-card"></div>
+      <div class="actions">
+        <button class="btn btn-success" onclick="startWrongQuiz()">重溫作答</button>
+        <button class="btn btn-neutral" onclick="clearWrongList()">清空全部</button>
+        <button class="btn btn-neutral" onclick="goToMCPage()">返回多項選擇題</button>
+        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+      </div>
+    </section>
+
+    <!-- 學習前沿科技 -->
+    <section id="techPage" class="page hidden">
+      <h2 class="page-title">學習前沿科技</h2>
+      <div id="techContainer" class="tech-grid"></div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="topics.js"></script>
+  <script src="questionBank1.js"></script>
+  <script src="questionBank2.js"></script>
+  <script src="questionBank3.js"></script>
+  <script src="frontierTech.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
