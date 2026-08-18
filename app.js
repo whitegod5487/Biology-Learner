@@ -80,7 +80,8 @@ const PAGE_IDS = [
   'challengePage',
   'challengeAnalysisPage',
   'wrongPage',
-  'techPage'
+  'techPage',
+  'rankingPage'
 ];
 
 function showPage(pageId) {
@@ -587,6 +588,20 @@ async function renderChallengeAnalysis() {
   summary.textContent = '命中率：' + correct + ' / ' + total + '（' + pct + '%）';
   content.appendChild(summary);
 
+  // 挑戰測試積分（每日第一次測試先計分；非同步顯示，唔阻塞分析渲染）
+  const pointsLine = document.createElement('p');
+  pointsLine.className = 'score points-award';
+  pointsLine.textContent = '獲得積分：計算中…';
+  content.appendChild(pointsLine);
+
+  awardChallengeTest(correct, total).then(function (earned) {
+    if (earned > 0) {
+      pointsLine.textContent = '獲得積分：+' + earned;
+    } else {
+      pointsLine.textContent = '今日已完成測試，不重複加分';
+    }
+  });
+
   const saves = [];
 
   challengeQuestions.forEach(function (q, idx) {
@@ -1061,23 +1076,31 @@ function showAuthNotice(el, message, type) {
   el.textContent = message;
 }
 
-// 更新頁首的用戶名稱 / 用戶代碼 / 登出按鈕
+// 更新頁首的用戶名稱 / 用戶代碼 / 積分 / 登出按鈕
 function updateAuthHeader() {
   const userArea = document.getElementById('userArea');
   const nameEl = document.getElementById('currentUserName');
   const codeEl = document.getElementById('currentUserCode');
+  const pointsEl = document.getElementById('currentUserPoints');
   if (!userArea || !nameEl || !codeEl) return;
   const user = getCurrentUser();
   if (!user) {
+    cachedUserPoints = null;
     userArea.classList.add('hidden');
     nameEl.textContent = '—';
     codeEl.textContent = '—';
+    if (pointsEl) pointsEl.textContent = '—';
     return;
   }
   const meta = user.user_metadata || {};
   userArea.classList.remove('hidden');
   nameEl.textContent = meta.username || '—';
   codeEl.textContent = meta.user_code || '—';
+  if (pointsEl) {
+    pointsEl.textContent = (cachedUserPoints === null) ? '—' : ('★ ' + cachedUserPoints);
+  }
+  // 非同步刷新積分（唔阻塞頁首，失敗亦無妨）
+  refreshUserPoints();
 }
 
 function showLoginPage() {
@@ -1163,6 +1186,7 @@ async function handleLogin(event) {
   }
 
   setCurrentUser(data.user);
+  await awardDailyLogin(); // 每日登入 +10（失敗亦唔阻塞登入）
   await migrateLegacyWrongQuestionsIfAny();
   if (emailEl) emailEl.value = '';
   if (passwordEl) passwordEl.value = '';
@@ -1266,6 +1290,7 @@ async function handleRegister(event) {
   // 若關閉咗 email 驗證，signUp 會直接建立 session；此時視為已登入
   if (data.session && data.user) {
     setCurrentUser(data.user);
+    await awardDailyLogin(); // 註冊後自動登入 → 每日登入 +10
   }
   updateAuthHeader();
 }
@@ -1362,6 +1387,7 @@ async function initAuth() {
     if (session && session.user) {
       setCurrentUser(session.user);
       await loadWrongQuestions(); // 預先載入錯題快取
+      await awardDailyLogin(); // 還原登入狀態 → 每日登入 +10
       updateAuthHeader();
       showPage('homePage');
     } else {
@@ -1374,6 +1400,142 @@ async function initAuth() {
     updateAuthHeader();
     showPage('loginPage');
   }
+}
+
+// ---------- 積分與排行榜（Supabase） ----------
+// 積分規則：
+//   - 每日登入 +10（每日一次，由 DB 端 RPC award_daily_login 保證）
+//   - 每日第一次挑戰測試計分：每答對一題 +1（上限 36），全對額外 +4
+//     （由 DB 端 RPC award_challenge_test 保證每日只計第一次）
+//   - 排行榜頁面讀取 profiles.points 排序顯示
+let cachedUserPoints = null; // 頁首積分快取（避免每次切頁都打 API）
+
+// 每日登入積分：呼叫 RPC award_daily_login，回傳實際獲得嘅積分
+async function awardDailyLogin() {
+  if (!supabaseReady || !sb || !getCurrentUser()) return 0;
+  try {
+    const { data, error } = await sb.rpc('award_daily_login');
+    if (error) return 0;
+    const awarded = typeof data === 'number' ? data : 0;
+    if (awarded > 0) refreshUserPoints();
+    return awarded;
+  } catch (e) {
+    // 失敗時靜默忽略，唔影響登入流程
+    return 0;
+  }
+}
+
+// 每日第一次挑戰測試積分：呼叫 RPC award_challenge_test，回傳實際獲得嘅積分
+async function awardChallengeTest(correct, total) {
+  if (!supabaseReady || !sb || !getCurrentUser()) return 0;
+  try {
+    const { data, error } = await sb.rpc('award_challenge_test', {
+      p_correct: correct,
+      p_total: total
+    });
+    if (error) return 0;
+    const earned = typeof data === 'number' ? data : 0;
+    if (earned > 0) refreshUserPoints();
+    return earned;
+  } catch (e) {
+    // 失敗時靜默忽略，唔影響分析頁渲染
+    return 0;
+  }
+}
+
+// 由 profiles 讀取目前用戶嘅積分並更新頁首顯示（非阻塞）
+async function refreshUserPoints() {
+  const user = getCurrentUser();
+  const pointsEl = document.getElementById('currentUserPoints');
+  if (!user || !sb || !supabaseReady) {
+    cachedUserPoints = null;
+    if (pointsEl) pointsEl.textContent = '—';
+    return;
+  }
+  try {
+    const { data, error } = await sb
+      .from('profiles')
+      .select('points')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error || !data || typeof data.points !== 'number') return;
+    cachedUserPoints = data.points;
+    if (pointsEl) pointsEl.textContent = '★ ' + data.points;
+  } catch (e) {
+    // 讀取失敗時略過，頁首照常顯示
+  }
+}
+
+// 讀取排行榜：按積分由高至低排序，回傳 rows 或空陣列
+async function loadRanking(limit) {
+  if (!supabaseReady || !sb) return [];
+  try {
+    const { data, error } = await sb
+      .from('profiles')
+      .select('id, username, user_code, points')
+      .order('points', { ascending: false })
+      .limit(limit || 50);
+    if (error) return [];
+    return data || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// 前往排行榜頁面（需要登入）
+async function goToRankingPage() {
+  if (!requireAuth()) return;
+  stopChallenge();
+  await renderRanking();
+  showPage('rankingPage');
+}
+
+// 渲染排行榜（每行：名次、用戶名稱、用戶代碼、積分；標示自己）
+async function renderRanking() {
+  const container = document.getElementById('rankingList');
+  const noticeEl = document.getElementById('rankingNotice');
+  if (!container) return;
+  if (noticeEl) noticeEl.textContent = '';
+  container.innerHTML = '';
+
+  const rows = await loadRanking(50);
+  if (!rows.length) {
+    const p = document.createElement('p');
+    p.className = 'notice';
+    p.textContent = '暫時未有排行榜資料。';
+    container.appendChild(p);
+    return;
+  }
+
+  const user = getCurrentUser();
+  rows.forEach(function (row, i) {
+    const item = document.createElement('div');
+    item.className = 'ranking-row';
+    const isMe = !!(user && row.id === user.id);
+    if (isMe) item.classList.add('ranking-me');
+
+    const rank = document.createElement('span');
+    rank.className = 'ranking-rank' + (i < 3 ? ' top' : '');
+    rank.textContent = String(i + 1);
+
+    const name = document.createElement('span');
+    name.className = 'ranking-name';
+    name.textContent = (row.username || '—') + (isMe ? '（你）' : '');
+
+    const code = document.createElement('span');
+    code.className = 'ranking-code';
+    code.textContent = row.user_code || '—';
+
+    const pts = document.createElement('span');
+    pts.className = 'ranking-points';
+    pts.textContent = (typeof row.points === 'number' ? row.points : 0) + ' 分';
+
+    item.appendChild(rank);
+    item.appendChild(name);
+    item.appendChild(code);
+    item.appendChild(pts);
+    container.appendChild(item);
+  });
 }
 
 // ---------- 主題切換 ----------
