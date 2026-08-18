@@ -10,7 +10,7 @@
 // ------------------------------------------------------------------
 
 // 例如 https://xxxx.supabase.co（在 Supabase 專案 Settings → API 取得）
-const SUPABASE_URL = '';
+const SUPABASE_URL = 'https://beinhtrdlslrdjcmhffm.supabase.co';
 
 // anon/public key（同樣喺 Settings → API 取得，非 service_role key！）
-const SUPABASE_ANON_KEY = '';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlaW5odHJkbHNscmRqY21oZmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwNjQ4OTgsImV4cCI6MjEwMjY0MDg5OH0.oFYkLTiv2DiQmdOlCIYisTtY8CieFMw-ffVRWqw1Y2M';
