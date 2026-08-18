@@ -4,11 +4,48 @@
 'use strict';
 
 // ---------- 安全合併題庫（檔案缺失時不報錯） ----------
-const ALL_QUESTIONS = [...(typeof QB1 !== 'undefined' ? QB1 : []), ...(typeof QB2 !== 'undefined' ? QB2 : []), ...(typeof QB3 !== 'undefined' ? QB3 : [])];
+// 依語言選擇內容庫（v0.5.1 起支援英文）：
+//   - 中文（香港）（zh-HK）→ 載入原本的 *.js（QB1 / QB2 / QB3 / FRONTIER_TECH / TOPICS / BOOKS）
+//   - English (UK)（en）→ 載入英文版 *.en.js（QB1_EN / QB2_EN / QB3_EN / FRONTIER_TECH_EN / TOPICS_EN / BOOKS_EN）
+// 語言在載入時由 localStorage（bioAppLanguage）決定（切換語言會重新載入頁面）。
+const IS_EN_BANK = getAppLanguage() === 'en';
 
-const FRONTIER = typeof FRONTIER_TECH !== 'undefined' ? FRONTIER_TECH : [];
-const TOPIC_LIST = typeof TOPICS !== 'undefined' ? TOPICS : [];
-const BOOK_LIST = typeof BOOKS !== 'undefined' ? BOOKS : [];
+const ALL_QUESTIONS = IS_EN_BANK
+  ? [...(typeof QB1_EN !== 'undefined' ? QB1_EN : []), ...(typeof QB2_EN !== 'undefined' ? QB2_EN : []), ...(typeof QB3_EN !== 'undefined' ? QB3_EN : [])]
+  : [...(typeof QB1 !== 'undefined' ? QB1 : []), ...(typeof QB2 !== 'undefined' ? QB2 : []), ...(typeof QB3 !== 'undefined' ? QB3 : [])];
+
+const FRONTIER = IS_EN_BANK
+  ? (typeof FRONTIER_TECH_EN !== 'undefined' ? FRONTIER_TECH_EN : [])
+  : (typeof FRONTIER_TECH !== 'undefined' ? FRONTIER_TECH : []);
+
+const TOPIC_LIST = IS_EN_BANK
+  ? (typeof TOPICS_EN !== 'undefined' ? TOPICS_EN : [])
+  : (typeof TOPICS !== 'undefined' ? TOPICS : []);
+
+const BOOK_LIST = IS_EN_BANK
+  ? (typeof BOOKS_EN !== 'undefined' ? BOOKS_EN : [])
+  : (typeof BOOKS !== 'undefined' ? BOOKS : []);
+
+const NOTE_LIST = typeof NOTES !== 'undefined' ? NOTES : [];
+
+// ---------- 長題目內容庫（按語言選用） ----------
+// 中文（香港）→ LQ1 / LQ2 / LQ3 / LQ_BOOKS；English (UK) → LQ1_EN / LQ2_EN / LQ3_EN / LQ_BOOKS_EN
+const LQ_BY_TOPIC = IS_EN_BANK
+  ? [...(typeof LQ1_EN !== 'undefined' ? LQ1_EN : []), ...(typeof LQ2_EN !== 'undefined' ? LQ2_EN : []), ...(typeof LQ3_EN !== 'undefined' ? LQ3_EN : [])]
+  : [...(typeof LQ1 !== 'undefined' ? LQ1 : []), ...(typeof LQ2 !== 'undefined' ? LQ2 : []), ...(typeof LQ3 !== 'undefined' ? LQ3 : [])];
+
+const LQ_BY_BOOK = IS_EN_BANK
+  ? (typeof LQ_BOOKS_EN !== 'undefined' ? LQ_BOOKS_EN : [])
+  : (typeof LQ_BOOKS !== 'undefined' ? LQ_BOOKS : []);
+
+// ---------- 版本（更新時記得同步 CHANGELOG.md） ----------
+// 每次更新後：1) 修改下方 APP_VERSION；2) 在 CHANGELOG.md 加入對應的版本記錄（見檔案末尾提醒）。
+const APP_VERSION = 'v0.6.4';
+
+function updateVersionLabel() {
+  const el = document.getElementById('appVersionLabel');
+  if (el) el.textContent = APP_VERSION;
+}
 
 // ---------- 狀態變數 ----------
 let practiceQuestions = [];
@@ -43,8 +80,8 @@ function shuffle(arr) {
 }
 
 function topicName(no) {
-  const t = TOPIC_LIST.find(function (x) { return x.no === no; });
-  return t ? t.name : ('課題 ' + no);
+  const topic = TOPIC_LIST.find(function (x) { return x.no === no; });
+  return topic ? topic.name : t('topic.label', { no: no });
 }
 
 function getQuestionsByTopic(no) {
@@ -81,7 +118,10 @@ const PAGE_IDS = [
   'challengeAnalysisPage',
   'wrongPage',
   'techPage',
-  'rankingPage'
+  'notesPage',
+  'longQPage',
+  'rankingPage',
+  'settingsPage'
 ];
 
 function showPage(pageId) {
@@ -97,6 +137,8 @@ function showPage(pageId) {
 function goHome() {
   if (!requireAuth()) return;
   stopChallenge();
+  goToNotesList();
+  goToLongQList();
   showPage('homePage');
 }
 
@@ -171,7 +213,7 @@ function renderPracticeBookList() {
   if (!BOOK_LIST.length) {
     const p = document.createElement('p');
     p.className = 'notice';
-    p.textContent = '課本清單尚未載入。';
+    p.textContent = t('practice.noBooks');
     listEl.appendChild(p);
     return;
   }
@@ -190,7 +232,7 @@ function renderPracticeBookList() {
 
     const btn = document.createElement('button');
     btn.className = 'btn btn-primary';
-    btn.textContent = '進入';
+    btn.textContent = t('btn.enter');
     btn.onclick = function () { startBookPractice(b.id); };
 
     row.appendChild(no);
@@ -200,37 +242,48 @@ function renderPracticeBookList() {
   });
 }
 
-function renderPracticeTopicList() {
+async function renderPracticeTopicList() {
   const listEl = document.getElementById('practiceTopicList');
   const noticeEl = document.getElementById('practiceListNotice');
   if (!listEl) return;
   listEl.innerHTML = '';
   if (noticeEl) noticeEl.textContent = '';
 
+  await loadQuestCompletions(); // 確保任務線完成狀態已載入，先可以顯示 ✓
+
   if (!TOPIC_LIST.length) {
     const p = document.createElement('p');
     p.className = 'notice';
-    p.textContent = '課題清單尚未載入。';
+    p.textContent = t('practice.noTopics');
     listEl.appendChild(p);
     return;
   }
 
-  TOPIC_LIST.forEach(function (t) {
+  TOPIC_LIST.forEach(function (topic) {
     const row = document.createElement('div');
     row.className = 'topic-row';
 
     const no = document.createElement('span');
     no.className = 'topic-no';
-    no.textContent = pad(t.no);
+    no.textContent = pad(topic.no);
 
     const name = document.createElement('span');
     name.className = 'topic-name';
-    name.textContent = t.name;
+    name.textContent = topic.name;
+
+    // 任務線：該課題練習全對完成 → 名稱旁加 ✓
+    if (isQuestCompleted(topic.no)) {
+      const tick = document.createElement('span');
+      tick.className = 'quest-tick';
+      tick.textContent = '✓';
+      tick.title = '任務完成（全對 +25 分，已領取）';
+      name.appendChild(tick);
+    }
 
     const btn = document.createElement('button');
     btn.className = 'btn btn-primary';
-    btn.textContent = '進入';
-    btn.onclick = function () { startPractice(t.no); };
+    btn.textContent = t('btn.enter');
+    btn.onclick = function () { startPractice(topic.no); };
 
     row.appendChild(no);
     row.appendChild(name);
@@ -244,7 +297,7 @@ function startPractice(topicNo) {
   const noticeEl = document.getElementById('practiceListNotice');
 
   if (!qs.length) {
-    if (noticeEl) noticeEl.textContent = '此課題暫無題目（題庫尚未載入或尚未填入）。';
+    if (noticeEl) noticeEl.textContent = t('practice.noQuestions');
     return;
   }
   if (noticeEl) noticeEl.textContent = '';
@@ -265,7 +318,7 @@ function startBookPractice(bookId) {
   const noticeEl = document.getElementById('practiceListNotice');
 
   if (!qs.length) {
-    if (noticeEl) noticeEl.textContent = '此課本暫無題目（題庫尚未載入或尚未填入）。';
+    if (noticeEl) noticeEl.textContent = t('practice.noQuestionsBook');
     return;
   }
   if (noticeEl) noticeEl.textContent = '';
@@ -298,14 +351,13 @@ function renderPracticeQuestion() {
   let topicLabel;
   if (practiceBookId !== null) {
     const book = getBookById(practiceBookId);
-    topicLabel = (book ? book.name : '課本 ' + practiceBookId) + '　' + (book ? book.range : '');
+    topicLabel = (book ? book.name : t('book.label', { id: practiceBookId })) + '　' + (book ? book.range : '');
   } else if (practiceTopicNo === null) {
-    topicLabel = '錯題重溫';
+    topicLabel = t('wrong.label');
   } else {
-    topicLabel = '課題 ' + practiceTopicNo + '　' + topicName(practiceTopicNo);
+    topicLabel = t('topic.label', { no: practiceTopicNo }) + '　' + topicName(practiceTopicNo);
   }
-  meta.textContent = topicLabel +
-    '　第 ' + (practiceIndex + 1) + ' / ' + practiceQuestions.length + ' 題';
+  meta.textContent = topicLabel + t('q.meta', { cur: practiceIndex + 1, total: practiceQuestions.length });
 
   const qText = document.createElement('div');
   qText.className = 'question-text';
@@ -337,7 +389,7 @@ async function answerPractice(selected, opts) {
   if (selected === q.correct) {
     practiceCorrectCount++;
     feedback.className = 'feedback correct';
-    feedback.textContent = '正確';
+    feedback.textContent = t('feedback.correct');
     if (wrongQuizActive) {
       // 錯題重溫：答對即從錯題簿移除（該題「畢業」）
       const list = await loadWrongQuestions();
@@ -348,8 +400,8 @@ async function answerPractice(selected, opts) {
     await saveWrongQuestion(q, selected);
     const reason = reasonOf(q, selected);
     feedback.className = 'feedback incorrect';
-    let msg = '錯誤\n正確答案：' + correctText;
-    if (reason) msg += '\n錯誤原因：' + reason;
+    let msg = t('feedback.incorrect', { ans: correctText });
+    if (reason) msg += t('feedback.reason', { reason: reason });
     feedback.textContent = msg;
   }
 
@@ -367,7 +419,7 @@ function nextPractice() {
   }
 }
 
-function showPracticeAnalysis() {
+async function showPracticeAnalysis() {
   const total = practiceQuestions.length;
   const correct = practiceCorrectCount;
   const pct = total ? Math.round((correct / total) * 100) : 0;
@@ -378,16 +430,16 @@ function showPracticeAnalysis() {
   const line1 = document.createElement('p');
   if (practiceBookId !== null) {
     const book = getBookById(practiceBookId);
-    line1.textContent = (book ? book.name : '課本 ' + practiceBookId) + '　' + (book ? book.range : '');
+    line1.textContent = (book ? book.name : t('book.label', { id: practiceBookId })) + '　' + (book ? book.range : '');
   } else if (wrongQuizActive) {
-    line1.textContent = '錯題重溫完成';
+    line1.textContent = t('wrong.done');
   } else {
-    line1.textContent = '課題 ' + practiceTopicNo + '　' + topicName(practiceTopicNo);
+    line1.textContent = t('topic.label', { no: practiceTopicNo }) + '　' + topicName(practiceTopicNo);
   }
 
   const line2 = document.createElement('p');
   line2.className = 'score';
-  line2.textContent = '命中率：' + correct + ' / ' + total;
+  line2.textContent = t('score.rate') + correct + ' / ' + total;
 
   const line3 = document.createElement('p');
   line3.className = 'score';
@@ -396,6 +448,24 @@ function showPracticeAnalysis() {
   content.appendChild(line1);
   content.appendChild(line2);
   content.appendChild(line3);
+
+  // 任務線：課題練習（非課本、非錯題重溫）全對 → 領取 +25 分（每課題一次）
+  const isTopicPractice = practiceTopicNo !== null && practiceBookId === null && !wrongQuizActive;
+  if (isTopicPractice && total > 0 && correct === total) {
+    const questLine = document.createElement('p');
+    questLine.className = 'score points-award';
+    questLine.textContent = t('quest.checking');
+    content.appendChild(questLine);
+
+    const earned = await awardQuestCompletion(practiceTopicNo);
+    if (earned > 0) {
+      questLine.textContent = t('quest.done', { no: practiceTopicNo });
+    } else if (isQuestCompleted(practiceTopicNo)) {
+      questLine.textContent = t('quest.doneBefore', { no: practiceTopicNo });
+    } else {
+      questLine.textContent = t('quest.failed');
+    }
+  }
 
   if (wrongQuizActive) wrongQuizActive = false;
 
@@ -423,7 +493,7 @@ function startChallenge() {
     if (container) {
       const p = document.createElement('p');
       p.className = 'notice';
-      p.textContent = '題庫尚未載入，無法開始挑戰模式。';
+      p.textContent = t('challenge.noBank');
       container.appendChild(p);
     }
     showPage('challengePage');
@@ -477,7 +547,7 @@ function renderChallengeQuestion() {
 
   const qText = document.createElement('div');
   qText.className = 'question-text';
-  qText.textContent = '第 ' + (challengeIndex + 1) + ' / ' + challengeQuestions.length + ' 題\n' + q.q;
+  qText.textContent = t('challenge.qTitle', { cur: challengeIndex + 1, total: challengeQuestions.length }) + q.q;
   container.appendChild(qText);
 
   const opts = document.createElement('div');
@@ -555,7 +625,7 @@ function updateChallengeTimer() {
   const mins = Math.floor(challengeTimerSeconds / 60);
   const secs = challengeTimerSeconds % 60;
 
-  if (textEl) textEl.textContent = '剩餘時間：' + pad(mins) + ':' + pad(secs);
+  if (textEl) textEl.textContent = t('timer.left') + pad(mins) + ':' + pad(secs);
   if (barEl) {
     const ratio = challengeTimerSeconds / (40 * 60);
     barEl.style.width = (ratio * 100) + '%';
@@ -585,20 +655,20 @@ async function renderChallengeAnalysis() {
 
   const summary = document.createElement('p');
   summary.className = 'score';
-  summary.textContent = '命中率：' + correct + ' / ' + total + '（' + pct + '%）';
+  summary.textContent = t('score.rate') + correct + ' / ' + total + '（' + pct + '%）';
   content.appendChild(summary);
 
   // 挑戰測試積分（每日第一次測試先計分；非同步顯示，唔阻塞分析渲染）
   const pointsLine = document.createElement('p');
   pointsLine.className = 'score points-award';
-  pointsLine.textContent = '獲得積分：計算中…';
+  pointsLine.textContent = t('challenge.pointsCalc');
   content.appendChild(pointsLine);
 
   awardChallengeTest(correct, total).then(function (earned) {
     if (earned > 0) {
-      pointsLine.textContent = '獲得積分：+' + earned;
+      pointsLine.textContent = t('challenge.pointsEarned', { n: earned });
     } else {
-      pointsLine.textContent = '今日已完成測試，不重複加分';
+      pointsLine.textContent = t('challenge.pointsNone');
     }
   });
 
@@ -612,19 +682,19 @@ async function renderChallengeAnalysis() {
 
     const qEl = document.createElement('p');
     qEl.className = 'review-q';
-    qEl.textContent = '第 ' + (idx + 1) + ' 題：' + q.q;
+    qEl.textContent = t('review.q', { n: idx + 1 }) + q.q;
     block.appendChild(qEl);
 
     const correctLine = document.createElement('p');
-    correctLine.textContent = '正確答案：' + letter(q.correct) + '. ' + q.options[q.correct];
+    correctLine.textContent = t('review.correct') + letter(q.correct) + '. ' + q.options[q.correct];
     block.appendChild(correctLine);
 
     const userLine = document.createElement('p');
     if (user === null) {
-      userLine.textContent = '你的作答：未作答';
+      userLine.textContent = t('review.your') + t('review.unanswered');
     } else {
-      userLine.textContent = '你的作答：' + letter(user) + '. ' + q.options[user] +
-        (user === q.correct ? '（正確）' : '（錯誤）');
+      userLine.textContent = t('review.your') + letter(user) + '. ' + q.options[user] +
+        (user === q.correct ? t('review.markCorrect') : t('review.markWrong'));
     }
     block.appendChild(userLine);
 
@@ -634,7 +704,7 @@ async function renderChallengeAnalysis() {
       if (reason) {
         const reasonLine = document.createElement('p');
         reasonLine.className = 'review-reason';
-        reasonLine.textContent = '錯誤原因：' + reason;
+        reasonLine.textContent = t('review.reason') + reason;
         block.appendChild(reasonLine);
       }
     }
@@ -748,7 +818,7 @@ async function renderWrongList() {
   if (!list.length) {
     const p = document.createElement('p');
     p.className = 'notice';
-    p.textContent = '尚未儲存任何錯題。';
+    p.textContent = t('wrong.empty');
     container.appendChild(p);
     return;
   }
@@ -766,7 +836,7 @@ async function renderWrongList() {
     item.appendChild(qEl);
 
     const correctLine = document.createElement('p');
-    correctLine.textContent = '正確答案：' + letter(q.correct) + '. ' + q.options[q.correct];
+    correctLine.textContent = t('review.correct') + letter(q.correct) + '. ' + q.options[q.correct];
     item.appendChild(correctLine);
 
     if (typeof record.wrongIndex === 'number' &&
@@ -774,21 +844,21 @@ async function renderWrongList() {
         record.wrongIndex !== q.correct &&
         q.options[record.wrongIndex]) {
       const userLine = document.createElement('p');
-      userLine.textContent = '你的選擇：' + letter(record.wrongIndex) + '. ' + q.options[record.wrongIndex];
+      userLine.textContent = t('wrong.yourChoice') + letter(record.wrongIndex) + '. ' + q.options[record.wrongIndex];
       item.appendChild(userLine);
 
       const reason = reasonOf(q, record.wrongIndex);
-      if (reason && reason !== '正確答案') {
+      if (reason && reason !== t('feedback.correct')) {
         const reasonLine = document.createElement('p');
         reasonLine.className = 'review-reason';
-        reasonLine.textContent = '錯誤原因：' + reason;
+        reasonLine.textContent = t('review.reason') + reason;
         item.appendChild(reasonLine);
       }
     }
 
     const removeBtn = document.createElement('button');
     removeBtn.className = 'btn btn-neutral';
-    removeBtn.textContent = '移除';
+    removeBtn.textContent = t('wrong.remove');
     removeBtn.onclick = async function () {
       await removeWrongQuestion(i);
       renderWrongList();
@@ -803,7 +873,7 @@ async function clearWrongList() {
   await clearWrongQuestions();
   await renderWrongList();
   const noticeEl = document.getElementById('wrongNotice');
-  if (noticeEl) noticeEl.textContent = '已清空全部錯題。';
+  if (noticeEl) noticeEl.textContent = t('wrong.cleared');
 }
 
 async function startWrongQuiz() {
@@ -813,7 +883,7 @@ async function startWrongQuiz() {
   const list = await loadWrongQuestions();
   const qs = list.map(function (r) { return r.q; }).filter(Boolean);
   if (!qs.length) {
-    if (noticeEl) noticeEl.textContent = '尚未儲存任何錯題，請先作答並儲存錯題。';
+    if (noticeEl) noticeEl.textContent = t('wrong.emptyQuiz');
     return;
   }
 
@@ -828,7 +898,239 @@ async function startWrongQuiz() {
   renderPracticeQuestion();
 }
 
+// ---------- 長題目（Long Questions） ----------
+// v0.6.0 起：按課題（每課題 15 條）或按課本（每冊 5 條跨課題綜合題）瀏覽長題目，
+// 只提供問題與參考答案（不作批改），答案可逐題展開／收起。
+let longQListMode = 'topic'; // 'topic' 按課題 / 'book' 按課本
+
+function goToLongQPage() {
+  if (!requireAuth()) return;
+  stopChallenge();
+  renderLongQList();
+  showPage('longQPage');
+}
+
+function goToLongQList() {
+  const listEl = document.getElementById('longQTopicList');
+  const bookListEl = document.getElementById('longQBookList');
+  const detailEl = document.getElementById('longQDetail');
+  const contentEl = document.getElementById('longQDetailContent');
+  if (listEl) listEl.classList.remove('hidden');
+  if (bookListEl) bookListEl.classList.remove('hidden');
+  if (detailEl) detailEl.classList.add('hidden');
+  // 清空已渲染的長題目內容，確保返回列表／主頁時不會殘留任何長題目文字
+  if (contentEl) contentEl.innerHTML = '';
+  renderLongQList();
+}
+
+function renderLongQList() {
+  const topicListEl = document.getElementById('longQTopicList');
+  const bookListEl = document.getElementById('longQBookList');
+  const detailEl = document.getElementById('longQDetail');
+  // 切換「按課題／按課本」時，先關閉已開啟的章節／課本詳情，避免殘留在列表下方
+  if (detailEl) detailEl.classList.add('hidden');
+  if (topicListEl) topicListEl.classList.toggle('hidden', longQListMode !== 'topic');
+  if (bookListEl) bookListEl.classList.toggle('hidden', longQListMode !== 'book');
+  syncLongQSwitch();
+  if (longQListMode === 'book') {
+    renderLongQBookList();
+  } else {
+    renderLongQTopicList();
+  }
+}
+
+function setLongQListMode(mode) {
+  longQListMode = (mode === 'book') ? 'book' : 'topic';
+  renderLongQList();
+}
+
+function syncLongQSwitch() {
+  const btns = document.querySelectorAll('#longQSwitch .practice-switch-btn');
+  btns.forEach(function (b) {
+    if (b.getAttribute('data-mode') === longQListMode) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+}
+
+function getLongQByTopic(no) {
+  return LQ_BY_TOPIC.find(function (c) { return c && c.topicNo === no; }) || null;
+}
+
+function renderLongQTopicList() {
+  const listEl = document.getElementById('longQTopicList');
+  const noticeEl = document.getElementById('longQNotice');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  if (noticeEl) noticeEl.textContent = '';
+
+  if (!LQ_BY_TOPIC.length) {
+    const p = document.createElement('p');
+    p.className = 'notice';
+    p.textContent = t('longq.noChapters');
+    listEl.appendChild(p);
+    return;
+  }
+
+  LQ_BY_TOPIC.forEach(function (ch) {
+    const row = document.createElement('div');
+    row.className = 'topic-row';
+
+    const no = document.createElement('span');
+    no.className = 'topic-no';
+    no.textContent = pad(ch.topicNo);
+
+    const name = document.createElement('span');
+    name.className = 'topic-name';
+    name.textContent = ch.name + '　' + t('longq.count', { n: ch.questions ? ch.questions.length : 0 });
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.textContent = t('btn.view');
+    btn.onclick = function () { openLongQChapter(ch.topicNo); };
+
+    row.appendChild(no);
+    row.appendChild(name);
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  });
+}
+
+function renderLongQBookList() {
+  const listEl = document.getElementById('longQBookList');
+  const noticeEl = document.getElementById('longQNotice');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  if (noticeEl) noticeEl.textContent = '';
+
+  if (!LQ_BY_BOOK.length) {
+    const p = document.createElement('p');
+    p.className = 'notice';
+    p.textContent = t('longq.noBooks');
+    listEl.appendChild(p);
+    return;
+  }
+
+  LQ_BY_BOOK.forEach(function (b) {
+    const row = document.createElement('div');
+    row.className = 'topic-row';
+
+    const no = document.createElement('span');
+    no.className = 'topic-no';
+    no.textContent = b.bookId;
+
+    const name = document.createElement('span');
+    name.className = 'topic-name';
+    name.textContent = b.name + '　' + b.range + '　' + t('longq.count', { n: b.questions ? b.questions.length : 0 });
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.textContent = t('btn.view');
+    btn.onclick = function () { openLongQBook(b.bookId); };
+
+    row.appendChild(no);
+    row.appendChild(name);
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  });
+}
+
+function openLongQChapter(no) {
+  const listEl = document.getElementById('longQTopicList');
+  const bookListEl = document.getElementById('longQBookList');
+  const detailEl = document.getElementById('longQDetail');
+  const content = document.getElementById('longQDetailContent');
+  const ch = getLongQByTopic(no);
+  if (!ch) return;
+  if (listEl) listEl.classList.add('hidden');
+  if (bookListEl) bookListEl.classList.add('hidden');
+  if (detailEl) detailEl.classList.remove('hidden');
+  if (!content) return;
+  content.innerHTML = '';
+
+  const title = document.createElement('h3');
+  title.className = 'page-title';
+  title.textContent = t('longq.chapterTitle', { no: pad(ch.topicNo), name: ch.name }) +
+    '　' + t('longq.count', { n: ch.questions ? ch.questions.length : 0 });
+  content.appendChild(title);
+
+  (ch.questions || []).forEach(function (lq, i) {
+    content.appendChild(buildLongQBlock(lq, i));
+  });
+}
+
+function openLongQBook(bookId) {
+  const listEl = document.getElementById('longQTopicList');
+  const bookListEl = document.getElementById('longQBookList');
+  const detailEl = document.getElementById('longQDetail');
+  const content = document.getElementById('longQDetailContent');
+  const b = LQ_BY_BOOK.find(function (x) { return x && x.bookId === bookId; });
+  if (!b) return;
+  if (listEl) listEl.classList.add('hidden');
+  if (bookListEl) bookListEl.classList.add('hidden');
+  if (detailEl) detailEl.classList.remove('hidden');
+  if (!content) return;
+  content.innerHTML = '';
+
+  const title = document.createElement('h3');
+  title.className = 'page-title';
+  title.textContent = t('longq.bookTitle', { id: b.bookId, name: b.name }) +
+    '　' + b.range + '　' + t('longq.count', { n: b.questions ? b.questions.length : 0 });
+  content.appendChild(title);
+
+  // 跨課題標籤提示
+  const tag = document.createElement('p');
+  tag.className = 'meta';
+  tag.textContent = t('longq.bookTag');
+  content.appendChild(tag);
+
+  (b.questions || []).forEach(function (lq, i) {
+    content.appendChild(buildLongQBlock(lq, i));
+  });
+}
+
+function buildLongQBlock(lq, i) {
+  const block = document.createElement('div');
+  block.className = 'longq-section';
+
+  const q = document.createElement('p');
+  q.className = 'longq-q';
+  q.textContent = t('longq.qTitle', { n: i + 1 }) + (lq.q || '');
+  block.appendChild(q);
+
+  if (lq.marks) {
+    const marks = document.createElement('p');
+    marks.className = 'longq-marks';
+    marks.textContent = lq.marks;
+    block.appendChild(marks);
+  }
+
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-neutral';
+  btn.textContent = t('longq.showAnswer');
+  btn.onclick = function () {
+    const existing = block.querySelector('.longq-answer');
+    if (existing) {
+      existing.remove();
+      btn.textContent = t('longq.showAnswer');
+    } else {
+      const ans = document.createElement('div');
+      ans.className = 'longq-answer';
+      ans.textContent = lq.answer || '';
+      block.appendChild(ans);
+      btn.textContent = t('longq.hideAnswer');
+    }
+  };
+  block.appendChild(btn);
+
+  return block;
+}
+
 // ---------- 學習前沿科技 ----------
+// v0.5.2 起：以「可摺疊列表」顯示（取代原本的卡片網格），25 項科技逐行列出，
+// 點擊標題列展開／收起詳細內容，方便瀏覽與瀏覽大量項目。
 function renderTechPage() {
   const container = document.getElementById('techContainer');
   if (!container) return;
@@ -837,50 +1139,81 @@ function renderTechPage() {
   if (!FRONTIER.length) {
     const p = document.createElement('p');
     p.className = 'notice';
-    p.textContent = '前沿科技內容即將推出。';
+    p.textContent = t('tech.empty');
     container.appendChild(p);
     return;
   }
 
-  FRONTIER.forEach(function (tech) {
-    container.appendChild(buildTechCard(tech));
+  FRONTIER.forEach(function (tech, index) {
+    container.appendChild(buildTechListItem(tech, index));
   });
 }
 
-function buildTechCard(tech) {
-  const card = document.createElement('article');
-  card.className = 'tech-card';
+function buildTechListItem(tech, index) {
+  const item = document.createElement('div');
+  item.className = 'tech-list-item';
 
-  const title = document.createElement('h2');
+  // 標題列（可點擊展開／收起）
+  const header = document.createElement('button');
+  header.type = 'button';
+  header.className = 'tech-list-header';
+  header.setAttribute('aria-expanded', 'false');
+
+  const headerText = document.createElement('span');
+  headerText.className = 'tech-list-header-text';
+
+  const num = document.createElement('span');
+  num.className = 'tech-list-num';
+  num.textContent = String(index + 1);
+
+  const titleWrap = document.createElement('span');
+  titleWrap.className = 'tech-list-title-wrap';
+
+  const title = document.createElement('span');
+  title.className = 'tech-list-title';
   title.textContent = tech.title || '';
-  card.appendChild(title);
 
-  const subtitle = document.createElement('p');
+  const subtitle = document.createElement('span');
   subtitle.className = 'tech-subtitle';
   subtitle.textContent = tech.subtitle || '';
-  card.appendChild(subtitle);
 
-  // Dse連結 + 相關課題列表
+  titleWrap.appendChild(title);
+  titleWrap.appendChild(subtitle);
+  headerText.appendChild(num);
+  headerText.appendChild(titleWrap);
+
+  const arrow = document.createElement('span');
+  arrow.className = 'tech-list-arrow';
+  arrow.textContent = '▸';
+
+  header.appendChild(headerText);
+  header.appendChild(arrow);
+
+  // 詳細內容（預設收起）
+  const body = document.createElement('div');
+  body.className = 'tech-list-body hidden';
+
+  // DSE連結 + 相關課題列表
   const dse = document.createElement('div');
   dse.className = 'tech-dse';
   const dseLabel = document.createElement('span');
   dseLabel.className = 'badge';
-  dseLabel.textContent = 'Dse連結';
+  dseLabel.textContent = t('tech.dse');
   dse.appendChild(dseLabel);
   const relList = document.createElement('ul');
   relList.className = 'related-list';
   (tech.relatedTopics || []).forEach(function (rt) {
     const li = document.createElement('li');
-    li.textContent = '課題 ' + rt.no + '　' + rt.name;
+    li.textContent = t('topic.label', { no: rt.no }) + '　' + rt.name;
     relList.appendChild(li);
   });
   dse.appendChild(relList);
-  card.appendChild(dse);
+  body.appendChild(dse);
 
   // 核心概念
   const conceptsTitle = document.createElement('h3');
-  conceptsTitle.textContent = '核心概念';
-  card.appendChild(conceptsTitle);
+  conceptsTitle.textContent = t('tech.core');
+  body.appendChild(conceptsTitle);
   const concepts = document.createElement('ul');
   concepts.className = 'bullet-list';
   (tech.coreConcepts || []).forEach(function (c) {
@@ -888,16 +1221,16 @@ function buildTechCard(tech) {
     li.textContent = c;
     concepts.appendChild(li);
   });
-  card.appendChild(concepts);
+  body.appendChild(concepts);
 
   // 科技概念說明
   const conceptTitle = document.createElement('h3');
-  conceptTitle.textContent = '科技概念說明';
-  card.appendChild(conceptTitle);
+  conceptTitle.textContent = t('tech.concept');
+  body.appendChild(conceptTitle);
   const concept = document.createElement('p');
   concept.className = 'tech-concept';
   concept.textContent = tech.concept || '';
-  card.appendChild(concept);
+  body.appendChild(concept);
 
   // 可靠來源（新分頁開啟）
   if (tech.sourceUrl) {
@@ -906,27 +1239,36 @@ function buildTechCard(tech) {
     source.href = tech.sourceUrl;
     source.target = '_blank';
     source.rel = 'noopener';
-    source.textContent = '可靠來源';
-    card.appendChild(source);
+    source.textContent = t('tech.source');
+    body.appendChild(source);
   }
 
   // 5 條相關互動 MC
   const mcqsTitle = document.createElement('h3');
-  mcqsTitle.textContent = '相關互動 MC';
-  card.appendChild(mcqsTitle);
+  mcqsTitle.textContent = t('tech.mcqs');
+  body.appendChild(mcqsTitle);
   const mcqs = tech.mcqs || [];
   if (!mcqs.length) {
     const p = document.createElement('p');
     p.className = 'notice';
-    p.textContent = '暫無互動 MC。';
-    card.appendChild(p);
+    p.textContent = t('tech.noMcq');
+    body.appendChild(p);
   } else {
     mcqs.forEach(function (mcq, mi) {
-      card.appendChild(buildTechMcq(mcq, mi));
+      body.appendChild(buildTechMcq(mcq, mi));
     });
   }
 
-  return card;
+  header.onclick = function () {
+    const isHidden = body.classList.toggle('hidden');
+    header.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+    arrow.textContent = isHidden ? '▸' : '▾';
+    item.classList.toggle('expanded', !isHidden);
+  };
+
+  item.appendChild(header);
+  item.appendChild(body);
+  return item;
 }
 
 function buildTechMcq(mcq, mi) {
@@ -935,7 +1277,7 @@ function buildTechMcq(mcq, mi) {
 
   const qEl = document.createElement('p');
   qEl.className = 'mcq-q';
-  qEl.textContent = '第 ' + (mi + 1) + ' 題：' + mcq.q;
+  qEl.textContent = t('review.q', { n: mi + 1 }) + mcq.q;
   block.appendChild(qEl);
 
   const opts = document.createElement('div');
@@ -956,12 +1298,12 @@ function buildTechMcq(mcq, mi) {
 
       if (oi === mcq.correct) {
         feedback.className = 'feedback correct';
-        feedback.textContent = '正確';
+        feedback.textContent = t('feedback.correct');
       } else {
         const reason = reasonOf(mcq, oi);
         feedback.className = 'feedback incorrect';
-        let msg = '錯誤\n正確答案：' + letter(mcq.correct) + '. ' + mcq.options[mcq.correct];
-        if (reason) msg += '\n錯誤原因：' + reason;
+        let msg = t('feedback.incorrect', { ans: letter(mcq.correct) + '. ' + mcq.options[mcq.correct] });
+        if (reason) msg += t('feedback.reason', { reason: reason });
         feedback.textContent = msg;
       }
     };
@@ -977,7 +1319,7 @@ function buildTechMcq(mcq, mi) {
 // 本程式改用 Supabase 作後端：
 //   - 密碼由 Supabase 於伺服器端以 bcrypt 雜湊及驗證，絕不儲存或傳送明文密碼。
 //   - 帳戶資料（profiles）與每用戶錯題（wrong_questions）均由 RLS 保護。
-//   - 登入／註冊使用「真實電郵 + 密碼」；「用戶名稱／顯示名稱」仍會經字典（USER_CODE_DICT）自動產生用戶代碼。
+//   - 登入／註冊使用「真實電郵 + 密碼」；用戶代碼（user_code）由 Supabase 觸發器於伺服器端自動產生，不會在前端產生或顯示。
 //   - 主題設定（bioAppTheme）維持儲存於 localStorage（全局設定，屬預期行為）。
 
 let currentUser = null;          // 目前登入的 Supabase user 物件
@@ -1011,62 +1353,9 @@ function clearCurrentUser() {
   updateAuthHeader();
 }
 
-// ---------- 用戶代碼字典（generateUserCode 用） ----------
-// 英文字母（不分大小寫）：A/a → '01'、B/b → '02' ... Z/z → '26'（字母序 + 1，補零 2 位）
-// 數字：0 → '27'、1 → '28' ... 9 → '36'（數字 + 27，補零 2 位）
-// 中文字（\u4E00–\u9FFF）：以「字典延伸」方式產生：(字元碼 - 0x4E00) + 100
-// 空格與不支援的字元會被略過。
-const USER_CODE_DICT = (function () {
-  const dict = {};
-  for (let i = 0; i < 26; i++) {
-    const code = pad(i + 1); // '01' ... '26'
-    dict[String.fromCharCode(65 + i)] = code; // A-Z
-    dict[String.fromCharCode(97 + i)] = code; // a-z
-  }
-  for (let d = 0; d <= 9; d++) {
-    dict[String(d)] = pad(d + 27); // '27' ... '36'
-  }
-  return dict;
-})();
-
-function isZhChar(ch) {
-  const c = ch.charCodeAt(0);
-  return c >= 0x4E00 && c <= 0x9FFF;
-}
-
-function generateUserCode(username) {
-  let code = '';
-  for (const ch of String(username)) {
-    if (USER_CODE_DICT[ch]) {
-      code += USER_CODE_DICT[ch];
-    } else if (isZhChar(ch)) {
-      // 字典延伸：以 (charCode - 0x4E00) + 100 表示中文字
-      code += String((ch.charCodeAt(0) - 0x4E00) + 100);
-    }
-    // 其餘字元（含空格）略過
-  }
-  return code;
-}
-
-// 確保 userCode 唯一：若基底碼已被使用，追加 '-01'、'-02'... 直到唯一
-// existingCodes 可為字串陣列（Supabase profiles 嘅 user_code），或含 userCode 之物件陣列
-function makeUniqueUserCode(baseCode, existingCodes) {
-  const taken = (existingCodes || []).map(function (u) {
-    return (typeof u === 'string') ? u : (u && u.userCode);
-  }).filter(Boolean);
-  if (taken.indexOf(baseCode) === -1) return baseCode;
-  for (let i = 1; i <= 999; i++) {
-    const candidate = baseCode + '-' + pad(i);
-    if (taken.indexOf(candidate) === -1) return candidate;
-  }
-  // 理論上不會走到這裡，保險起見追加隨機兩位數字
-  for (let i = 0; i < 100; i++) {
-    const n = Math.floor(Math.random() * 100);
-    const candidate = baseCode + '-' + pad(n);
-    if (taken.indexOf(candidate) === -1) return candidate;
-  }
-  return baseCode + '-' + Date.now().toString().slice(-4);
-}
+// ---------- 用戶代碼（user_code）----------
+// 用戶代碼由 Supabase 後端觸發器（handle_new_user）喺註冊時自動產生，
+// 前端唔再產生、傳送或顯示用戶代碼。
 
 function showAuthNotice(el, message, type) {
   if (!el) return;
@@ -1076,26 +1365,23 @@ function showAuthNotice(el, message, type) {
   el.textContent = message;
 }
 
-// 更新頁首的用戶名稱 / 用戶代碼 / 積分 / 登出按鈕
+// 更新頁首的用戶名稱 / 積分 / 登出按鈕
 function updateAuthHeader() {
   const userArea = document.getElementById('userArea');
   const nameEl = document.getElementById('currentUserName');
-  const codeEl = document.getElementById('currentUserCode');
   const pointsEl = document.getElementById('currentUserPoints');
-  if (!userArea || !nameEl || !codeEl) return;
+  if (!userArea || !nameEl) return;
   const user = getCurrentUser();
   if (!user) {
     cachedUserPoints = null;
     userArea.classList.add('hidden');
     nameEl.textContent = '—';
-    codeEl.textContent = '—';
     if (pointsEl) pointsEl.textContent = '—';
     return;
   }
   const meta = user.user_metadata || {};
   userArea.classList.remove('hidden');
   nameEl.textContent = meta.username || '—';
-  codeEl.textContent = meta.user_code || '—';
   if (pointsEl) {
     pointsEl.textContent = (cachedUserPoints === null) ? '—' : ('★ ' + cachedUserPoints);
   }
@@ -1119,7 +1405,7 @@ function showLoginPage() {
   }
   // 若未設定 Supabase，顯示設定提示
   if (!supabaseReady && loginNotice) {
-    showAuthNotice(loginNotice, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+    showAuthNotice(loginNotice, t('auth.notConfigured'), 'error');
   }
   showPage('loginPage');
 }
@@ -1162,11 +1448,11 @@ async function handleLogin(event) {
   if (noticeEl) showAuthNotice(noticeEl, '', '');
 
   if (!supabaseReady || !sb) {
-    showAuthNotice(noticeEl, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+    showAuthNotice(noticeEl, t('auth.notConfigured'), 'error');
     return;
   }
   if (!email || !password) {
-    showAuthNotice(noticeEl, '請輸入電郵和密碼。', 'error');
+    showAuthNotice(noticeEl, t('auth.needEmailPassword'), 'error');
     return;
   }
 
@@ -1176,10 +1462,10 @@ async function handleLogin(event) {
   });
 
   if (error || !data.user) {
-    let msg = '電郵或密碼錯誤。';
+    let msg = t('auth.invalidCredentials');
     const m = (error && error.message ? error.message : '').toLowerCase();
     if (/confirm|not confirmed|email_not_confirmed|unverified|not verified/.test(m)) {
-      msg = '請先到電郵收件匣確認電郵。';
+      msg = t('auth.confirmEmail');
     }
     showAuthNotice(noticeEl, msg, 'error');
     return;
@@ -1188,6 +1474,7 @@ async function handleLogin(event) {
   setCurrentUser(data.user);
   await awardDailyLogin(); // 每日登入 +10（失敗亦唔阻塞登入）
   await migrateLegacyWrongQuestionsIfAny();
+  await loadQuestCompletions(); // 預先載入任務線完成記錄
   if (emailEl) emailEl.value = '';
   if (passwordEl) passwordEl.value = '';
   updateAuthHeader();
@@ -1208,27 +1495,27 @@ async function handleRegister(event) {
   if (noticeEl) showAuthNotice(noticeEl, '', '');
 
   if (!supabaseReady || !sb) {
-    showAuthNotice(noticeEl, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+    showAuthNotice(noticeEl, t('auth.notConfigured'), 'error');
     return;
   }
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-    showAuthNotice(noticeEl, '請輸入有效嘅電郵地址。', 'error');
+    showAuthNotice(noticeEl, t('auth.emailInvalid'), 'error');
     return;
   }
   if (username.length < 1 || username.length > 20) {
-    showAuthNotice(noticeEl, '用戶名稱長度須為 1–20 個字元。', 'error');
+    showAuthNotice(noticeEl, t('auth.usernameLength'), 'error');
     return;
   }
   if (!/^[a-zA-Z0-9\u4E00-\u9FFF ]+$/.test(username)) {
-    showAuthNotice(noticeEl, '用戶名稱只能包含中文字、英文字母、數字和空格。', 'error');
+    showAuthNotice(noticeEl, t('auth.usernameChars'), 'error');
     return;
   }
   if (password.length < 6) {
-    showAuthNotice(noticeEl, '密碼至少需要 6 個字元。', 'error');
+    showAuthNotice(noticeEl, t('auth.passwordShort'), 'error');
     return;
   }
   if (password !== confirm) {
-    showAuthNotice(noticeEl, '兩次輸入的密碼不一致。', 'error');
+    showAuthNotice(noticeEl, t('auth.passwordMismatch'), 'error');
     return;
   }
 
@@ -1238,29 +1525,19 @@ async function handleRegister(event) {
     .select('username')
     .ilike('username', username);
   if (nameErr) {
-    showAuthNotice(noticeEl, '伺服器連線失敗，請稍後再試。', 'error');
+    showAuthNotice(noticeEl, t('auth.serverFail'), 'error');
     return;
   }
   if (nameRows && nameRows.length > 0) {
-    showAuthNotice(noticeEl, '用戶名稱已被使用，請換一個名稱。', 'error');
+    showAuthNotice(noticeEl, t('auth.nameTaken'), 'error');
     return;
   }
-
-  // 取得現有 user_code 清單，避免用戶編碼衝突
-  const { data: codeRows, error: codeErr } = await sb.from('profiles').select('user_code');
-  if (codeErr) {
-    showAuthNotice(noticeEl, '伺服器連線失敗，請稍後再試。', 'error');
-    return;
-  }
-  const takenCodes = (codeRows || []).map(function (r) { return r.user_code; });
-  const baseCode = generateUserCode(username);
-  const userCode = makeUniqueUserCode(baseCode, takenCodes);
 
   const { data, error } = await sb.auth.signUp({
     email: email,
     password: password,
     options: {
-      data: { username: username, user_code: userCode }
+      data: { username: username }
     }
   });
 
@@ -1274,15 +1551,12 @@ async function handleRegister(event) {
     } else if (/rate.?limit|too many|429/.test(m)) {
       msg = '嘗試次數過多，請稍後再試（' + (error.message || '') + '）。';
     } else {
-      msg = '註冊失敗：' + (error.message || '請重試。');
+      msg = t('auth.regFailed') + (error.message || t('auth.retry'));
     }
     showAuthNotice(noticeEl, msg, 'error');
     return;
   }
 
-  // 顯示生成的用戶代碼（清楚標示）
-  const codeEl = document.getElementById('registerUserCode');
-  if (codeEl) codeEl.textContent = userCode;
   const formEl = document.getElementById('registerForm');
   const successEl = document.getElementById('registerSuccessArea');
   if (formEl) formEl.classList.add('hidden');
@@ -1303,7 +1577,7 @@ function proceedToLogin() {
   const emailEl = document.getElementById('loginEmail');
   if (emailEl) emailEl.value = lastEmail;
   const noticeEl = document.getElementById('loginNotice');
-  if (noticeEl) showAuthNotice(noticeEl, '註冊成功，請使用密碼登入。', 'success');
+  if (noticeEl) showAuthNotice(noticeEl, t('auth.registerSuccess'), 'success');
 }
 
 async function logout() {
@@ -1311,7 +1585,7 @@ async function logout() {
     showLoginPage();
     return;
   }
-  if (!window.confirm('確定要登出嗎？')) return;
+  if (!window.confirm(t('logout.confirm'))) return;
   stopChallenge();
   if (supabaseReady && sb) {
     try {
@@ -1321,6 +1595,7 @@ async function logout() {
     }
   }
   clearWrongCache();
+  clearQuestCache();
   clearCurrentUser();
   updateAuthHeader();
   showPage('loginPage');
@@ -1378,7 +1653,7 @@ async function initAuth() {
     updateAuthHeader();
     showPage('loginPage');
     const noticeEl = document.getElementById('loginNotice');
-    if (noticeEl) showAuthNotice(noticeEl, '請先喺 supabaseConfig.js 填上 Supabase 專案資料。', 'error');
+    if (noticeEl) showAuthNotice(noticeEl, t('auth.notConfigured'), 'error');
     return;
   }
   try {
@@ -1387,6 +1662,7 @@ async function initAuth() {
     if (session && session.user) {
       setCurrentUser(session.user);
       await loadWrongQuestions(); // 預先載入錯題快取
+      await loadQuestCompletions(); // 預先載入任務線完成記錄
       await awardDailyLogin(); // 還原登入狀態 → 每日登入 +10
       updateAuthHeader();
       showPage('homePage');
@@ -1472,7 +1748,7 @@ async function loadRanking(limit) {
   try {
     const { data, error } = await sb
       .from('profiles')
-      .select('id, username, user_code, points')
+      .select('id, username, points')
       .order('points', { ascending: false })
       .limit(limit || 50);
     if (error) return [];
@@ -1490,7 +1766,7 @@ async function goToRankingPage() {
   showPage('rankingPage');
 }
 
-// 渲染排行榜（每行：名次、用戶名稱、用戶代碼、積分；標示自己）
+// 渲染排行榜（每行：名次、用戶名稱、積分；標示自己）
 async function renderRanking() {
   const container = document.getElementById('rankingList');
   const noticeEl = document.getElementById('rankingNotice');
@@ -1502,7 +1778,7 @@ async function renderRanking() {
   if (!rows.length) {
     const p = document.createElement('p');
     p.className = 'notice';
-    p.textContent = '暫時未有排行榜資料。';
+    p.textContent = t('ranking.empty');
     container.appendChild(p);
     return;
   }
@@ -1520,39 +1796,223 @@ async function renderRanking() {
 
     const name = document.createElement('span');
     name.className = 'ranking-name';
-    name.textContent = (row.username || '—') + (isMe ? '（你）' : '');
-
-    const code = document.createElement('span');
-    code.className = 'ranking-code';
-    code.textContent = row.user_code || '—';
+    name.textContent = (row.username || '—') + (isMe ? t('ranking.you') : '');
 
     const pts = document.createElement('span');
     pts.className = 'ranking-points';
-    pts.textContent = (typeof row.points === 'number' ? row.points : 0) + ' 分';
+    pts.textContent = (typeof row.points === 'number' ? row.points : 0) + t('ranking.points');
 
     item.appendChild(rank);
     item.appendChild(name);
-    item.appendChild(code);
     item.appendChild(pts);
     container.appendChild(item);
   });
 }
 
+// ---------- 任務線（Quest Line） ----------
+// 每課題完成「課題練習」並全部答對（20/20）→ 名稱旁加 ✓，並獲得 +25 分；
+// 每帳戶每課題只可獲得一次（由 Supabase 嘅 quest_completions 表 unique 約束保證）。
+// 完成記錄載入後放入記憶體快取（questCache），與錯題快取做法一致。
+let questCache = [];          // 已完成課題編號陣列：[topicNo, ...]
+let questCacheLoaded = false; // 是否已由 Supabase 載入
+
+function clearQuestCache() {
+  questCache = [];
+  questCacheLoaded = false;
+}
+
+// 由 Supabase 載入當前用戶嘅任務完成記錄
+async function loadQuestCompletions() {
+  const user = getCurrentUser();
+  if (!user || !sb || !supabaseReady) return [];
+  if (questCacheLoaded) return questCache;
+  try {
+    const { data, error } = await sb
+      .from('quest_completions')
+      .select('topic_no')
+      .eq('user_id', user.id);
+    if (error) return [];
+    questCache = (data || []).map(function (row) { return row.topic_no; });
+    questCacheLoaded = true;
+    return questCache;
+  } catch (e) {
+    // 讀取失敗時回傳空清單
+    return [];
+  }
+}
+
+// 該課題是否已完成任務（全對領獎）
+function isQuestCompleted(topicNo) {
+  return questCache.indexOf(topicNo) !== -1;
+}
+
+// 呼叫 RPC award_quest_completion，回傳實際獲得嘅積分（首次 25，否則 0）
+async function awardQuestCompletion(topicNo) {
+  if (!supabaseReady || !sb || !getCurrentUser()) return 0;
+  try {
+    const { data, error } = await sb.rpc('award_quest_completion', {
+      p_topic_no: topicNo
+    });
+    if (error) return 0;
+    const earned = typeof data === 'number' ? data : 0;
+    if (earned > 0) {
+      if (questCache.indexOf(topicNo) === -1) questCache.push(topicNo);
+      refreshUserPoints();
+    }
+    return earned;
+  } catch (e) {
+    // 失敗時靜默忽略，唔影響分析頁渲染
+    return 0;
+  }
+}
+
+// ---------- 筆記（Notes） ----------
+// 內容來自 notes.js（NOTES 陣列）；按課題列出章節（headings）與兩條長題目。
+function getNoteByNo(no) {
+  return NOTE_LIST.find(function (n) { return n && n.no === no; }) || null;
+}
+
+function goToNotesPage() {
+  if (!requireAuth()) return;
+  stopChallenge();
+  renderNotesChapterList();
+  showPage('notesPage');
+}
+
+function goToNotesList() {
+  const listEl = document.getElementById('notesChapterList');
+  const detailEl = document.getElementById('notesDetail');
+  if (listEl) listEl.classList.remove('hidden');
+  if (detailEl) detailEl.classList.add('hidden');
+}
+
+function renderNotesChapterList() {
+  const listEl = document.getElementById('notesChapterList');
+  const detailEl = document.getElementById('notesDetail');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  if (detailEl) detailEl.classList.add('hidden');
+
+  if (!NOTE_LIST.length) {
+    const p = document.createElement('p');
+    p.className = 'notice';
+    p.textContent = t('notes.empty');
+    listEl.appendChild(p);
+    return;
+  }
+
+  NOTE_LIST.forEach(function (n) {
+    const row = document.createElement('div');
+    row.className = 'topic-row';
+
+    const no = document.createElement('span');
+    no.className = 'topic-no';
+    no.textContent = pad(n.no);
+
+    const name = document.createElement('span');
+    name.className = 'topic-name';
+    name.textContent = n.name;
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.textContent = t('btn.view');
+    btn.onclick = function () { openNotesChapter(n.no); };
+
+    row.appendChild(no);
+    row.appendChild(name);
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  });
+}
+
+function openNotesChapter(no) {
+  const listEl = document.getElementById('notesChapterList');
+  const detailEl = document.getElementById('notesDetail');
+  const content = document.getElementById('notesDetailContent');
+  const note = getNoteByNo(no);
+  if (!note) return;
+  if (listEl) listEl.classList.add('hidden');
+  if (detailEl) detailEl.classList.remove('hidden');
+  if (!content) return;
+  content.innerHTML = '';
+
+  const title = document.createElement('h3');
+  title.className = 'page-title';
+  title.textContent = t('notes.topicTitle', { no: pad(note.no), name: note.name });
+  content.appendChild(title);
+
+  // 章節（headings）＋ 點列筆記
+  (note.sections || []).forEach(function (sec) {
+    const block = document.createElement('div');
+    block.className = 'note-section';
+
+    const h = document.createElement('h4');
+    h.className = 'note-heading';
+    h.textContent = sec.heading || '';
+    block.appendChild(h);
+
+    const ul = document.createElement('ul');
+    ul.className = 'note-list';
+    (sec.points || []).forEach(function (pt) {
+      const li = document.createElement('li');
+      li.textContent = pt;
+      ul.appendChild(li);
+    });
+    block.appendChild(ul);
+    content.appendChild(block);
+  });
+
+  // 長題目（每課兩條）
+  (note.longQuestions || []).forEach(function (lq, i) {
+    const block = document.createElement('div');
+    block.className = 'note-longq';
+
+    const q = document.createElement('p');
+    q.className = 'note-q';
+    q.textContent = t('notes.longQ', { n: i + 1 }) + lq.q;
+    block.appendChild(q);
+
+    const marks = document.createElement('p');
+    marks.className = 'note-marks';
+    marks.textContent = lq.marks || '';
+    block.appendChild(marks);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-neutral';
+    btn.textContent = t('notes.showAnswer');
+    btn.onclick = function () {
+      const existing = block.querySelector('.note-answer');
+      if (existing) {
+        existing.remove();
+        btn.textContent = t('notes.showAnswer');
+      } else {
+        const ans = document.createElement('div');
+        ans.className = 'note-answer';
+        ans.textContent = lq.answer || '';
+        block.appendChild(ans);
+        btn.textContent = t('notes.hideAnswer');
+      }
+    };
+    block.appendChild(btn);
+
+    content.appendChild(block);
+  });
+}
+
 // ---------- 主題切換 ----------
-// 各主題對應的按鈕圖示與提示文字
+// 主題（淺色 / 深色 / 暖色）改為喺設定頁中選擇；偏好儲存於 localStorage（bioAppTheme）。
 var THEME_META = {
-  light: { icon: '☀️', title: '目前主題：淺色（點擊切換）' },
-  dark: { icon: '🌙', title: '目前主題：深色（點擊切換）' },
-  warm: { icon: '🌇', title: '目前主題：暖色（點擊切換）' }
+  light: { icon: '☀️', title: '目前主題：淺色' },
+  dark: { icon: '🌙', title: '目前主題：深色' },
+  warm: { icon: '🌇', title: '目前主題：暖色' }
 };
 
-// 更新單一主題按鈕的圖示與提示文字
+// 更新設定頁中的主題選擇按鈕（標示目前主題）
 function updateThemeButton(name) {
-  var btn = document.getElementById('themeCycleBtn');
-  if (!btn) return;
-  var meta = THEME_META[name] || THEME_META.light;
-  btn.textContent = meta.icon;
-  btn.title = meta.title;
+  var active = THEME_META[name] ? name : 'light';
+  document.querySelectorAll('#settingsThemeSelector .theme-select-btn').forEach(function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-theme') === active);
+  });
 }
 
 function setTheme(name) {
@@ -1568,16 +2028,6 @@ function setTheme(name) {
   }
 }
 
-// 依順序循環切換主題：淺色 → 深色 → 暖色 → 淺色
-function cycleTheme() {
-  var current = document.documentElement.getAttribute('data-theme');
-  var next = 'light';
-  if (current === 'light') next = 'dark';
-  else if (current === 'dark') next = 'warm';
-  else if (current === 'warm') next = 'light';
-  setTheme(next);
-}
-
 function initTheme() {
   let saved = 'light';
   try {
@@ -1589,7 +2039,588 @@ function initTheme() {
   setTheme(saved);
 }
 
+// ---------- 語言 / 國際化（i18n） ----------
+// 支援 中文（香港）（zh-HK）與 English (UK)（en）；
+// 語言偏好儲存於 localStorage（bioAppLanguage）。
+var I18N = {
+  'zh-HK': {
+    // 應用程式 / 頁首
+    'app.title': '生物溫習程式',
+    'btn.logout': '登出',
+    'settings.btnTitle': '設定',
+
+    // 登入
+    'page.login': '登入',
+    'login.subtitle': '請登入以使用生物溫習程式',
+    'login.email': '電郵地址',
+    'login.password': '密碼',
+    'login.emailPh': '請輸入電郵地址',
+    'login.passwordPh': '請輸入密碼',
+    'btn.login': '登入',
+    'login.switch': '還沒有帳戶？',
+    'btn.register': '註冊新帳戶',
+
+    // 註冊
+    'page.register': '註冊新帳戶',
+    'register.email': '電郵地址',
+    'register.emailPh': '請輸入電郵地址',
+    'register.username': '用戶名稱／顯示名稱（1–20 字元：中文字、英文字母、數字、空格）',
+    'register.usernamePh': '例如：小明 或 Bob123',
+    'register.password': '密碼（至少 6 個字元）',
+    'register.passwordPh': '請輸入密碼',
+    'register.confirm': '確認密碼',
+    'register.confirmPh': '再次輸入密碼',
+    'btn.submitRegister': '註冊',
+    'register.switch': '已有帳戶？',
+    'btn.backLogin': '返回登入',
+    'auth.registerSuccessNote': '註冊成功！請前往登入。',
+    'auth.confirmHint': '注意：若已開啟電郵驗證（Confirm email），請先到電郵收件匣點擊確認連結，然後先可以登入。',
+    'btn.goLogin': '前往登入',
+
+    // 頁面標題 / 卡片
+    'page.home': '主頁',
+    'card.mc': '多項選擇題',
+    'card.tech': '學習前沿科技',
+    'card.wrong': '錯題重溫',
+    'card.notes': '筆記',
+    'card.ranking': '排行榜',
+    'page.mc': '多項選擇題',
+    'card.practice': '練習模式',
+    'card.challenge': '挑戰模式',
+    'btn.backHome': '返回主頁',
+    'page.practice': '練習模式',
+    'practice.subtitle': '按課題（每課題 20 題）或按課本（整冊）練習',
+    'practice.switchTopic': '按課題',
+    'practice.switchBook': '按課本',
+    'btn.backMC': '返回多項選擇題',
+    'btn.next': '下一題',
+    'btn.analysis': '進入分析頁',
+    'btn.backList': '返回課題列表',
+    'page.practiceAnalysis': '練習分析',
+    'page.challenge': '挑戰模式',
+    'btn.prev': '上一題',
+    'btn.finish': '完成',
+    'btn.exitChallenge': '退出挑戰模式',
+    'page.challengeAnalysis': '挑戰分析',
+    'page.wrong': '錯題重溫',
+    'btn.rework': '重溫作答',
+    'btn.clearAll': '清空全部',
+    'page.tech': '學習前沿科技',
+    'page.ranking': '排行榜',
+    'page.notes': '筆記',
+    'notes.subtitle': '按課題瀏覽點列式筆記，每課附兩條長題目（含參考答案）',
+    'btn.backList2': '← 返回課題列表',
+    'btn.enter': '進入',
+    'btn.view': '查看',
+
+    // 練習 / 挑戰 動態文字
+    'topic.label': '課題 {no}',
+    'book.label': '課本 {id}',
+    'wrong.label': '錯題重溫',
+    'wrong.done': '錯題重溫完成',
+    'q.meta': '　第 {cur} / {total} 題',
+    'score.rate': '命中率：',
+    'feedback.correct': '正確',
+    'feedback.incorrect': '錯誤\n正確答案：{ans}',
+    'feedback.reason': '\n錯誤原因：{reason}',
+    'practice.noBooks': '課本清單尚未載入。',
+    'practice.noTopics': '課題清單尚未載入。',
+    'practice.noQuestions': '此課題暫無題目（題庫尚未載入或尚未填入）。',
+    'practice.noQuestionsBook': '此課本暫無題目（題庫尚未載入或尚未填入）。',
+    'timer.left': '剩餘時間：',
+    'challenge.noBank': '題庫尚未載入，無法開始挑戰模式。',
+    'challenge.qTitle': '第 {cur} / {total} 題\n',
+    'challenge.pointsCalc': '獲得積分：計算中…',
+    'challenge.pointsEarned': '獲得積分：+{n}',
+    'challenge.pointsNone': '今日已完成測試，不重複加分',
+    'review.q': '第 {n} 題：',
+    'review.correct': '正確答案：',
+    'review.your': '你的作答：',
+    'review.unanswered': '未作答',
+    'review.markCorrect': '（正確）',
+    'review.markWrong': '（錯誤）',
+    'review.reason': '錯誤原因：',
+    'quest.checking': '任務線：檢查中…',
+    'quest.done': '任務完成！課題 {no} 全對 ✓ 獲得 25 分',
+    'quest.doneBefore': '課題 {no} 已於之前完成（25 分已領取）',
+    'quest.failed': '任務線加分未能完成，請稍後再試。',
+
+    // 錯題
+    'wrong.empty': '尚未儲存任何錯題。',
+    'wrong.emptyQuiz': '尚未儲存任何錯題，請先作答並儲存錯題。',
+    'wrong.cleared': '已清空全部錯題。',
+    'wrong.yourChoice': '你的選擇：',
+    'wrong.remove': '移除',
+
+    // 前沿科技
+    'tech.empty': '前沿科技內容即將推出。',
+    'tech.dse': 'Dse連結',
+    'tech.core': '核心概念',
+    'tech.concept': '科技概念說明',
+    'tech.source': '可靠來源',
+    'tech.mcqs': '相關互動 MC',
+    'tech.noMcq': '暫無互動 MC。',
+
+    // 筆記
+    'notes.empty': '筆記尚未載入（notes.js 缺失）。',
+    'notes.topicTitle': '課題 {no}　{name}',
+    'notes.longQ': '長題目 {n}：',
+    'notes.showAnswer': '顯示參考答案',
+    'notes.hideAnswer': '隱藏參考答案',
+
+    // 長題目
+    'card.longq': '長題目',
+    'page.longq': '長題目',
+    'longq.subtitle': '按課題（每課題 15 題）或按課本（每冊 5 題跨課題綜合題）瀏覽長題目，含參考答案',
+    'longq.noChapters': '長題目內容尚未載入（longQuestions*.js 缺失）。',
+    'longq.noBooks': '課本長題目尚未載入（bookLongQuestions.js 缺失）。',
+    'longq.chapterTitle': '課題 {no}　{name}',
+    'longq.bookTitle': '課本 {id}　{name}',
+    'longq.bookTag': '本冊為跨課題（cross-topic）綜合長題目，需綜合運用本冊多個課題的知識。',
+    'longq.qTitle': '長題目 {n}：',
+    'longq.count': '（{n} 題）',
+    'longq.showAnswer': '顯示參考答案',
+    'longq.hideAnswer': '隱藏參考答案',
+
+    // 排行榜
+    'ranking.empty': '暫時未有排行榜資料。',
+    'ranking.you': '（你）',
+    'ranking.points': ' 分',
+
+    // 登入／註冊 訊息
+    'auth.notConfigured': '請先喺 supabaseConfig.js 填上 Supabase 專案資料。',
+    'auth.needEmailPassword': '請輸入電郵和密碼。',
+    'auth.invalidCredentials': '電郵或密碼錯誤。',
+    'auth.confirmEmail': '請先到電郵收件匣確認電郵。',
+    'auth.emailInvalid': '請輸入有效嘅電郵地址。',
+    'auth.usernameLength': '用戶名稱長度須為 1–20 個字元。',
+    'auth.usernameChars': '用戶名稱只能包含中文字、英文字母、數字和空格。',
+    'auth.passwordShort': '密碼至少需要 6 個字元。',
+    'auth.passwordMismatch': '兩次輸入的密碼不一致。',
+    'auth.serverFail': '伺服器連線失敗，請稍後再試。',
+    'auth.nameTaken': '用戶名稱已被使用，請換一個名稱。',
+    'auth.regFailed': '註冊失敗：',
+    'auth.retry': '請重試。',
+    'auth.registerSuccess': '註冊成功，請使用密碼登入。',
+    'logout.confirm': '確定要登出嗎？',
+
+    // 設定頁
+    'page.settings': '設定',
+    'settings.appearance': '外觀',
+    'settings.appearanceDesc': '選擇應用程式的顏色主題',
+    'settings.theme.light': '淺色',
+    'settings.theme.dark': '深色',
+    'settings.theme.warm': '暖色',
+    'settings.language': '語言',
+    'settings.languageDesc': '選擇應用程式的顯示語言',
+    'settings.name': '用戶名稱',
+    'settings.nameDesc': '修改你的顯示名稱（1–20 字元）',
+    'settings.namePh': '請輸入新名稱',
+    'settings.saveName': '儲存名稱',
+    'settings.email': '電郵',
+    'settings.emailDesc': '你的登入電郵地址',
+    'settings.danger.title': '危險區域',
+    'settings.danger.desc': '刪除帳戶將永久移除所有資料，此操作無法復原。',
+    'settings.deleteAccount': '刪除帳戶',
+    'settings.deleteConfirmMsg': '你確定要永久刪除帳戶嗎？此操作無法復原。',
+    'settings.deleteConfirmYes': '是，我確定刪除',
+    'settings.deleteCancel': '取消',
+    'settings.deleteErr': '刪除帳戶失敗，請稍後再試。',
+    'settings.name.errNoBackend': '請先喺 supabaseConfig.js 填上 Supabase 專案資料。',
+    'settings.name.errLength': '用戶名稱長度須為 1–20 個字元。',
+    'settings.name.errChars': '用戶名稱只能包含中文字、英文字母、數字和空格。',
+    'settings.name.errTaken': '用戶名稱已被使用，請換一個名稱。',
+    'settings.name.errServer': '伺服器連線失敗，請稍後再試。',
+    'settings.name.saved': '名稱已更新！'
+  },
+  'en': {
+    // App / header
+    'app.title': 'Biology Revision App',
+    'btn.logout': 'Log out',
+    'settings.btnTitle': 'Settings',
+
+    // Login
+    'page.login': 'Log In',
+    'login.subtitle': 'Please log in to use the Biology Revision App',
+    'login.email': 'Email address',
+    'login.password': 'Password',
+    'login.emailPh': 'Enter your email address',
+    'login.passwordPh': 'Enter your password',
+    'btn.login': 'Log In',
+    'login.switch': 'Don\'t have an account?',
+    'btn.register': 'Register',
+
+    // Register
+    'page.register': 'Register a new account',
+    'register.email': 'Email address',
+    'register.emailPh': 'Enter your email address',
+    'register.username': 'Username / display name (1–20 characters: letters, numbers, spaces, Chinese)',
+    'register.usernamePh': 'e.g. Bob123',
+    'register.password': 'Password (at least 6 characters)',
+    'register.passwordPh': 'Enter a password',
+    'register.confirm': 'Confirm password',
+    'register.confirmPh': 'Re-enter your password',
+    'btn.submitRegister': 'Register',
+    'register.switch': 'Already have an account?',
+    'btn.backLogin': 'Back to Log In',
+    'auth.registerSuccessNote': 'Registration successful! Please log in.',
+    'auth.confirmHint': 'Note: If email confirmation is enabled, please click the confirmation link in your inbox before logging in.',
+    'btn.goLogin': 'Go to Log In',
+
+    // Page titles / cards
+    'page.home': 'Home',
+    'card.mc': 'Multiple Choice',
+    'card.tech': 'Frontier Technology',
+    'card.wrong': 'Wrong Questions',
+    'card.notes': 'Notes',
+    'card.ranking': 'Leaderboard',
+    'page.mc': 'Multiple Choice',
+    'card.practice': 'Practice Mode',
+    'card.challenge': 'Challenge Mode',
+    'btn.backHome': 'Back to Home',
+    'page.practice': 'Practice Mode',
+    'practice.subtitle': 'Practise by topic (20 questions each) or by book (whole book)',
+    'practice.switchTopic': 'By Topic',
+    'practice.switchBook': 'By Book',
+    'btn.backMC': 'Back to MC',
+    'btn.next': 'Next',
+    'btn.analysis': 'View Analysis',
+    'btn.backList': 'Back to List',
+    'page.practiceAnalysis': 'Practice Analysis',
+    'page.challenge': 'Challenge Mode',
+    'btn.prev': 'Previous',
+    'btn.finish': 'Finish',
+    'btn.exitChallenge': 'Exit Challenge',
+    'page.challengeAnalysis': 'Challenge Analysis',
+    'page.wrong': 'Wrong Questions',
+    'btn.rework': 'Revise Answers',
+    'btn.clearAll': 'Clear All',
+    'page.tech': 'Frontier Technology',
+    'page.ranking': 'Leaderboard',
+    'page.notes': 'Notes',
+    'notes.subtitle': 'Browse bullet-point notes by topic, each with two long questions (with answers)',
+    'btn.backList2': '← Back to topic list',
+    'btn.enter': 'Start',
+    'btn.view': 'View',
+
+    // Practice / challenge dynamic text
+    'topic.label': 'Topic {no}',
+    'book.label': 'Book {id}',
+    'wrong.label': 'Wrong Questions Review',
+    'wrong.done': 'Wrong-question review complete',
+    'q.meta': '　Question {cur} / {total}',
+    'score.rate': 'Accuracy: ',
+    'feedback.correct': 'Correct',
+    'feedback.incorrect': 'Incorrect\nCorrect answer: {ans}',
+    'feedback.reason': '\nReason: {reason}',
+    'practice.noBooks': 'Book list not loaded.',
+    'practice.noTopics': 'Topic list not loaded.',
+    'practice.noQuestions': 'No questions for this topic yet (bank not loaded or not filled in).',
+    'practice.noQuestionsBook': 'No questions for this book yet (bank not loaded or not filled in).',
+    'timer.left': 'Time left: ',
+    'challenge.noBank': 'Question bank not loaded. Cannot start challenge mode.',
+    'challenge.qTitle': 'Question {cur} / {total}\n',
+    'challenge.pointsCalc': 'Points: calculating…',
+    'challenge.pointsEarned': 'Points earned: +{n}',
+    'challenge.pointsNone': 'Already scored today; no extra points',
+    'review.q': 'Question {n}: ',
+    'review.correct': 'Correct answer: ',
+    'review.your': 'Your answer: ',
+    'review.unanswered': 'Not answered',
+    'review.markCorrect': ' (Correct)',
+    'review.markWrong': ' (Incorrect)',
+    'review.reason': 'Reason: ',
+    'quest.checking': 'Quest line: checking…',
+    'quest.done': 'Quest complete! Topic {no} all correct ✓ +25 points',
+    'quest.doneBefore': 'Topic {no} completed before (25 points already claimed)',
+    'quest.failed': 'Could not award quest points. Please try again.',
+
+    // Wrong questions
+    'wrong.empty': 'No wrong questions saved yet.',
+    'wrong.emptyQuiz': 'No wrong questions yet. Answer questions first to save them.',
+    'wrong.cleared': 'All wrong questions cleared.',
+    'wrong.yourChoice': 'Your choice: ',
+    'wrong.remove': 'Remove',
+
+    // Frontier tech
+    'tech.empty': 'Frontier tech content coming soon.',
+    'tech.dse': 'DSE link',
+    'tech.core': 'Core concepts',
+    'tech.concept': 'Concept explanation',
+    'tech.source': 'Source',
+    'tech.mcqs': 'Related interactive MCs',
+    'tech.noMcq': 'No interactive MCs yet.',
+
+    // Notes
+    'notes.empty': 'Notes not loaded (notes.js missing).',
+    'notes.topicTitle': 'Topic {no}  {name}',
+    'notes.longQ': 'Long question {n}: ',
+    'notes.showAnswer': 'Show answer',
+    'notes.hideAnswer': 'Hide answer',
+
+    // Long questions
+    'card.longq': 'Long Questions',
+    'page.longq': 'Long Questions',
+    'longq.subtitle': 'Browse long questions by topic (15 per chapter) or by book (5 cross-topic questions per book), with model answers',
+    'longq.noChapters': 'Long question content not loaded (longQuestions*.js missing).',
+    'longq.noBooks': 'Book long questions not loaded (bookLongQuestions.js missing).',
+    'longq.chapterTitle': 'Topic {no}  {name}',
+    'longq.bookTitle': 'Book {id}  {name}',
+    'longq.bookTag': 'This volume contains cross-topic comprehensive long questions, requiring knowledge from several chapters in this book.',
+    'longq.qTitle': 'Long question {n}: ',
+    'longq.count': '({n} questions)',
+    'longq.showAnswer': 'Show model answer',
+    'longq.hideAnswer': 'Hide model answer',
+
+    // Ranking
+    'ranking.empty': 'No leaderboard data yet.',
+    'ranking.you': ' (You)',
+    'ranking.points': ' pts',
+
+    // Auth messages
+    'auth.notConfigured': 'Please set up the Supabase project details in supabaseConfig.js.',
+    'auth.needEmailPassword': 'Please enter your email and password.',
+    'auth.invalidCredentials': 'Incorrect email or password.',
+    'auth.confirmEmail': 'Please confirm your email from the inbox first.',
+    'auth.emailInvalid': 'Please enter a valid email address.',
+    'auth.usernameLength': 'Username must be 1–20 characters.',
+    'auth.usernameChars': 'Username can only contain letters, numbers, spaces and Chinese characters.',
+    'auth.passwordShort': 'Password must be at least 6 characters.',
+    'auth.passwordMismatch': 'Passwords do not match.',
+    'auth.serverFail': 'Server connection failed. Please try again.',
+    'auth.nameTaken': 'Username already taken. Please choose another.',
+    'auth.regFailed': 'Registration failed: ',
+    'auth.retry': 'Please try again.',
+    'auth.registerSuccess': 'Registration successful. Please log in.',
+    'logout.confirm': 'Are you sure you want to log out?',
+
+    // Settings page
+    'page.settings': 'Settings',
+    'settings.appearance': 'Appearance',
+    'settings.appearanceDesc': 'Choose the app colour theme',
+    'settings.theme.light': 'Light',
+    'settings.theme.dark': 'Dark',
+    'settings.theme.warm': 'Sunset',
+    'settings.language': 'Language',
+    'settings.languageDesc': 'Choose the app display language',
+    'settings.name': 'Username',
+    'settings.nameDesc': 'Change your display name (1–20 characters)',
+    'settings.namePh': 'Enter a new name',
+    'settings.saveName': 'Save Name',
+    'settings.email': 'Email',
+    'settings.emailDesc': 'The email address you log in with',
+    'settings.danger.title': 'Danger Zone',
+    'settings.danger.desc': 'Deleting your account permanently removes all data. This cannot be undone.',
+    'settings.deleteAccount': 'Delete Account',
+    'settings.deleteConfirmMsg': 'Are you sure you want to permanently delete your account? This cannot be undone.',
+    'settings.deleteConfirmYes': 'Yes, delete my account',
+    'settings.deleteCancel': 'Cancel',
+    'settings.deleteErr': 'Failed to delete account. Please try again.',
+    'settings.name.errNoBackend': 'Please set up the Supabase project details in supabaseConfig.js.',
+    'settings.name.errLength': 'Username must be 1–20 characters.',
+    'settings.name.errChars': 'Username can only contain letters, numbers, spaces and Chinese characters.',
+    'settings.name.errTaken': 'Username already taken. Please choose another.',
+    'settings.name.errServer': 'Server connection failed. Please try again.',
+    'settings.name.saved': 'Name updated!'
+  }
+};
+
+function getAppLanguage() {
+  var lang = 'zh-HK';
+  try {
+    var v = localStorage.getItem('bioAppLanguage');
+    if (v === 'zh-HK' || v === 'en') lang = v;
+  } catch (e) {}
+  return lang;
+}
+
+function t(key, params) {
+  var table = I18N[getAppLanguage()] || I18N['zh-HK'];
+  var s = (key in table) ? table[key] : (I18N['zh-HK'][key] || key);
+  if (params) {
+    Object.keys(params).forEach(function (k) {
+      s = s.split('{' + k + '}').join(params[k]);
+    });
+  }
+  return s;
+}
+
+function setAppLanguage(lang) {
+  if (lang !== 'zh-HK' && lang !== 'en') lang = 'zh-HK';
+  try {
+    localStorage.setItem('bioAppLanguage', lang);
+  } catch (e) {}
+  updateLanguageSelector();
+  applyLanguage();
+  window.location.reload();
+}
+
+function applyLanguage() {
+  document.documentElement.setAttribute('lang', getAppLanguage() === 'en' ? 'en-GB' : 'zh-HK');
+  document.querySelectorAll('[data-i18n]').forEach(function (el) {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(function (el) {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+    el.title = t(el.getAttribute('data-i18n-title'));
+  });
+}
+
+function initLanguage() {
+  applyLanguage();
+}
+
+function updateLanguageSelector() {
+  var lang = getAppLanguage();
+  document.querySelectorAll('#settingsLangSelector .lang-select-btn').forEach(function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+  });
+}
+
+// ---------- 設定頁 ----------
+function goToSettingsPage() {
+  if (!requireAuth()) return;
+  stopChallenge();
+  renderSettingsPage();
+  showPage('settingsPage');
+}
+
+function renderSettingsPage() {
+  var user = getCurrentUser();
+  updateLanguageSelector();
+  updateThemeButton(document.documentElement.getAttribute('data-theme'));
+  var nameEl = document.getElementById('settingsNameInput');
+  if (nameEl && user) nameEl.value = (user.user_metadata && user.user_metadata.username) || '';
+  var emailEl = document.getElementById('settingsEmailDisplay');
+  if (emailEl) emailEl.textContent = (user && user.email) ? user.email : '—';
+  var noticeEl = document.getElementById('settingsNameNotice');
+  if (noticeEl) showAuthNotice(noticeEl, '', '');
+  resetDeleteAccountPanel();
+}
+
+// 儲存用戶名稱：更新 profiles 表 + auth 元數據
+async function saveSettingsName() {
+  if (!requireAuth()) return;
+  var user = getCurrentUser();
+  var noticeEl = document.getElementById('settingsNameNotice');
+  var inputEl = document.getElementById('settingsNameInput');
+  if (!user || !inputEl || !noticeEl) return;
+  var name = inputEl.value.trim();
+
+  if (!supabaseReady || !sb) {
+    showAuthNotice(noticeEl, t('settings.name.errNoBackend'), 'error');
+    return;
+  }
+  if (name.length < 1 || name.length > 20) {
+    showAuthNotice(noticeEl, t('settings.name.errLength'), 'error');
+    return;
+  }
+  if (!/^[a-zA-Z0-9\u4E00-\u9FFF ]+$/.test(name)) {
+    showAuthNotice(noticeEl, t('settings.name.errChars'), 'error');
+    return;
+  }
+
+  // 檢查名稱是否已被其他用戶使用（不分大小寫）
+  const { data: nameRows, error: nameErr } = await sb
+    .from('profiles')
+    .select('id, username')
+    .ilike('username', name);
+  if (nameErr) {
+    showAuthNotice(noticeEl, t('settings.name.errServer'), 'error');
+    return;
+  }
+  var usedByOther = (nameRows || []).some(function (row) {
+    return row.id !== user.id;
+  });
+  if (usedByOther) {
+    showAuthNotice(noticeEl, t('settings.name.errTaken'), 'error');
+    return;
+  }
+
+  // 更新 profiles 表
+  const { error: profErr } = await sb
+    .from('profiles')
+    .update({ username: name })
+    .eq('id', user.id);
+  if (profErr) {
+    showAuthNotice(noticeEl, t('settings.name.errServer'), 'error');
+    return;
+  }
+
+  // 更新 auth 元數據（令 user.user_metadata 同步）
+  const { data: updData, error: updErr } = await sb.auth.updateUser({
+    data: { username: name }
+  });
+  if (updErr) {
+    showAuthNotice(noticeEl, t('settings.name.errServer'), 'error');
+    return;
+  }
+  setCurrentUser(updData.user || user);
+  updateAuthHeader();
+  showAuthNotice(noticeEl, t('settings.name.saved'), 'success');
+}
+
+// ---------- 刪除帳戶（雙重確認） ----------
+function requestDeleteAccount() {
+  var panel = document.getElementById('deleteConfirmPanel');
+  var btn = document.getElementById('deleteAccountBtn');
+  var noticeEl = document.getElementById('deleteAccountNotice');
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  if (btn) btn.disabled = true;
+  if (noticeEl) showAuthNotice(noticeEl, '', '');
+}
+
+function cancelDeleteAccount() {
+  resetDeleteAccountPanel();
+}
+
+function resetDeleteAccountPanel() {
+  var panel = document.getElementById('deleteConfirmPanel');
+  var btn = document.getElementById('deleteAccountBtn');
+  var noticeEl = document.getElementById('deleteAccountNotice');
+  var confirmBtn = document.getElementById('deleteConfirmBtn');
+  if (panel) panel.classList.add('hidden');
+  if (btn) btn.disabled = false;
+  if (confirmBtn) confirmBtn.disabled = false;
+  if (noticeEl) showAuthNotice(noticeEl, '', '');
+}
+
+async function confirmDeleteAccount() {
+  var noticeEl = document.getElementById('deleteAccountNotice');
+  var confirmBtn = document.getElementById('deleteConfirmBtn');
+  if (confirmBtn) confirmBtn.disabled = true;
+
+  // 呼叫後端 RPC delete_account（由 Supabase 刪除 auth user，子表因 cascade 自動清除）
+  if (supabaseReady && sb && getCurrentUser()) {
+    try {
+      const { error } = await sb.rpc('delete_account');
+      if (error) {
+        showAuthNotice(noticeEl, t('settings.deleteErr'), 'error');
+        if (confirmBtn) confirmBtn.disabled = false;
+        return;
+      }
+      try { await sb.auth.signOut(); } catch (e) { /* 用戶已刪除，signOut 失敗可忽略 */ }
+    } catch (e) {
+      showAuthNotice(noticeEl, t('settings.deleteErr'), 'error');
+      if (confirmBtn) confirmBtn.disabled = false;
+      return;
+    }
+  }
+
+  // 本地清除並返回登入頁
+  clearWrongCache();
+  clearQuestCache();
+  clearCurrentUser();
+  updateAuthHeader();
+  showPage('loginPage');
+}
+
 // ---------- 初始化 ----------
 initTheme();
+initLanguage();
 updateAuthHeader();
+updateVersionLabel();
 initAuth(); // 非同步：檢查登入狀態並載入錯題快取（未設定 Supabase 時會顯示設定提示）

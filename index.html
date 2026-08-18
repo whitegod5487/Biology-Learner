@@ -243,6 +243,12 @@
       font-weight: 600;
     }
 
+    .quest-tick {
+      color: var(--correct-text);
+      font-weight: 700;
+      margin-left: 6px;
+    }
+
     .practice-switch {
       display: inline-flex;
       gap: 4px;
@@ -395,29 +401,95 @@
       font-weight: 600;
     }
 
-    .tech-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 18px;
+    /* ---------- 學習前沿科技（列表顯示，v0.5.2 起由卡片改為列表） ---------- */
+    .tech-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
       margin-top: 16px;
     }
 
-    @media (min-width: 720px) {
-      .tech-grid { grid-template-columns: 1fr 1fr; }
-    }
-
-    .tech-card {
+    .tech-list-item {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      border-radius: 10px;
+      overflow: hidden;
     }
 
-    .tech-card h2 {
-      margin: 0 0 4px;
-      font-size: 20px;
+    .tech-list-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .tech-list-header:hover {
+      background: var(--option-hover-bg);
+    }
+
+    .tech-list-header-text {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .tech-list-num {
+      flex: 0 0 auto;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .tech-list-title-wrap {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .tech-list-title {
+      font-size: 17px;
+      font-weight: 700;
       color: var(--primary);
+    }
+
+    .tech-list-header .tech-subtitle {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .tech-list-arrow {
+      flex: 0 0 auto;
+      font-size: 16px;
+      color: var(--muted);
+      transition: transform 0.15s;
+    }
+
+    .tech-list-item.expanded .tech-list-arrow {
+      transform: rotate(90deg);
+    }
+
+    .tech-list-body {
+      padding: 4px 16px 16px;
+      border-top: 1px solid var(--border);
     }
 
     .tech-subtitle {
@@ -447,7 +519,7 @@
       padding-left: 18px;
     }
 
-    .tech-card h3 {
+    .tech-list-body h3 {
       margin: 16px 0 6px;
       font-size: 16px;
       border-left: 4px solid var(--accent);
@@ -589,19 +661,6 @@
       text-align: center;
     }
 
-    .auth-code-box {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      color: var(--accent);
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px;
-      margin: 8px 0;
-      word-break: break-all;
-    }
-
     .auth-hint {
       color: var(--muted);
       font-size: 13px;
@@ -633,18 +692,6 @@
       font-size: 13px;
       font-weight: 600;
       max-width: 140px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .user-code-chip {
-      color: #fff;
-      font-size: 12px;
-      background: rgba(0, 0, 0, 0.18);
-      border-radius: 999px;
-      padding: 2px 8px;
-      max-width: 160px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -716,16 +763,6 @@
       white-space: nowrap;
     }
 
-    .ranking-code {
-      color: var(--muted);
-      font-size: 13px;
-      background: var(--option-bg);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 2px 8px;
-      white-space: nowrap;
-    }
-
     .ranking-points {
       flex: 0 0 auto;
       font-weight: 700;
@@ -740,20 +777,217 @@
     }
 
     .points-award { color: var(--accent); }
+
+    /* ---------- 筆記（Notes） ---------- */
+    .notes-detail { margin-top: 16px; }
+
+    .note-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 14px;
+    }
+
+    .note-heading {
+      margin: 0 0 8px;
+      font-size: 17px;
+      color: var(--primary);
+      border-left: 4px solid var(--accent);
+      padding-left: 8px;
+    }
+
+    .note-list { margin: 6px 0 0; padding-left: 20px; }
+    .note-list li { margin-bottom: 4px; }
+
+    .note-longq {
+      background: var(--mcq-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+
+    .note-q {
+      font-weight: 600;
+      white-space: pre-line;
+      margin: 0 0 4px;
+    }
+
+    .note-marks { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+
+    .note-answer {
+      white-space: pre-line;
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: var(--option-selected-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+    }
+
+    /* ---------- 長題目（Long Questions） ---------- */
+    .longq-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 14px;
+    }
+
+    .longq-heading {
+      margin: 0 0 8px;
+      font-size: 17px;
+      color: var(--primary);
+      border-left: 4px solid var(--accent);
+      padding-left: 8px;
+    }
+
+    .longq-q {
+      font-weight: 600;
+      white-space: pre-line;
+      margin: 0 0 4px;
+    }
+
+    .longq-marks {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0 0 6px;
+    }
+
+    .longq-answer {
+      white-space: pre-line;
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: var(--option-selected-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+    }
+
+    .app-version {
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    /* ---------- 設定頁 ---------- */
+    .settings-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 14px;
+    }
+
+    .settings-title {
+      margin: 0 0 4px;
+      font-size: 17px;
+      color: var(--primary);
+      border-left: 4px solid var(--accent);
+      padding-left: 8px;
+    }
+
+    .theme-selector,
+    .lang-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .theme-select-btn,
+    .lang-select-btn {
+      padding: 10px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--option-bg);
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .theme-select-btn:hover,
+    .lang-select-btn:hover {
+      background: var(--option-hover-bg);
+      border-color: var(--accent);
+    }
+
+    .theme-select-btn.active,
+    .lang-select-btn.active {
+      background: var(--option-selected-bg);
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+      font-weight: 600;
+    }
+
+    .settings-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .settings-row .auth-input { flex: 1 1 220px; }
+
+    .settings-email {
+      margin: 8px 0 0;
+      font-weight: 600;
+      color: var(--accent);
+      word-break: break-all;
+    }
+
+    .danger-zone {
+      border-color: #e57373;
+      background: var(--wrong-bg);
+    }
+
+    .danger-title {
+      color: var(--wrong-text);
+      border-left-color: var(--wrong-text);
+    }
+
+    .btn-danger {
+      background: #d93025;
+      color: #fff;
+    }
+
+    .btn-danger:hover { background: #b71c1c; }
+
+    .delete-confirm {
+      margin-top: 10px;
+      padding: 12px;
+      border: 1px solid var(--wrong-text);
+      border-radius: 8px;
+      background: var(--card-bg);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .delete-warning {
+      margin: 0;
+      width: 100%;
+      color: var(--wrong-text);
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
   <header class="app-header">
-    <h1 onclick="goHome()">生物溫習程式</h1>
+    <h1 onclick="goHome()" data-i18n="app.title">生物溫習程式</h1>
     <div class="header-right">
       <div id="userArea" class="user-area hidden">
         <span id="currentUserName" class="user-chip">—</span>
-        <span id="currentUserCode" class="user-code-chip">—</span>
         <span id="currentUserPoints" class="user-points-chip">—</span>
-        <button type="button" id="logoutBtn" class="logout-btn" onclick="logout()">登出</button>
+        <button type="button" id="logoutBtn" class="logout-btn" data-i18n="btn.logout" onclick="logout()">登出</button>
       </div>
+      <span id="appVersionLabel" class="app-version"></span>
       <div class="theme-toggle">
-        <button type="button" id="themeCycleBtn" class="theme-btn" title="目前主題：淺色（點擊切換）" onclick="cycleTheme()">☀️</button>
+        <button type="button" id="settingsBtn" class="theme-btn" data-i18n-title="settings.btnTitle" title="設定" onclick="goToSettingsPage()">⚙️</button>
       </div>
     </div>
   </header>
@@ -764,19 +998,19 @@
     <section id="loginPage" class="page hidden">
       <div class="auth-wrap">
         <div class="auth-card">
-          <h2 class="page-title">登入</h2>
-          <p class="sub">請登入以使用生物溫習程式</p>
+          <h2 class="page-title" data-i18n="page.login">登入</h2>
+          <p class="sub" data-i18n="login.subtitle">請登入以使用生物溫習程式</p>
           <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)" novalidate>
-            <label class="auth-label" for="loginEmail">電郵地址</label>
-            <input type="email" id="loginEmail" class="auth-input" autocomplete="email" placeholder="請輸入電郵地址">
-            <label class="auth-label" for="loginPassword">密碼</label>
-            <input type="password" id="loginPassword" class="auth-input" autocomplete="current-password" placeholder="請輸入密碼">
+            <label class="auth-label" for="loginEmail" data-i18n="login.email">電郵地址</label>
+            <input type="email" id="loginEmail" class="auth-input" autocomplete="email" data-i18n-placeholder="login.emailPh" placeholder="請輸入電郵地址">
+            <label class="auth-label" for="loginPassword" data-i18n="login.password">密碼</label>
+            <input type="password" id="loginPassword" class="auth-input" autocomplete="current-password" data-i18n-placeholder="login.passwordPh" placeholder="請輸入密碼">
             <p id="loginNotice" class="auth-notice"></p>
             <div class="auth-actions">
-              <button type="submit" class="btn btn-primary">登入</button>
+              <button type="submit" class="btn btn-primary" data-i18n="btn.login">登入</button>
             </div>
           </form>
-          <p class="auth-switch">還沒有帳戶？<button type="button" class="auth-link-btn" onclick="showRegisterPage()">註冊新帳戶</button></p>
+          <p class="auth-switch"><span data-i18n="login.switch">還沒有帳戶？</span><button type="button" class="auth-link-btn" data-i18n="btn.register" onclick="showRegisterPage()">註冊新帳戶</button></p>
         </div>
       </div>
     </section>
@@ -785,109 +1019,113 @@
     <section id="registerPage" class="page hidden">
       <div class="auth-wrap">
         <div class="auth-card">
-          <h2 class="page-title">註冊新帳戶</h2>
+          <h2 class="page-title" data-i18n="page.register">註冊新帳戶</h2>
           <form id="registerForm" class="auth-form" onsubmit="handleRegister(event)" novalidate>
-            <label class="auth-label" for="registerEmail">電郵地址</label>
-            <input type="email" id="registerEmail" class="auth-input" autocomplete="email" placeholder="請輸入電郵地址">
-            <label class="auth-label" for="registerUsername">用戶名稱／顯示名稱（1–20 字元：中文字、英文字母、數字、空格）</label>
-            <input type="text" id="registerUsername" class="auth-input" maxlength="20" autocomplete="username" placeholder="例如：小明 或 Bob123">
-            <label class="auth-label" for="registerPassword">密碼（至少 6 個字元）</label>
-            <input type="password" id="registerPassword" class="auth-input" autocomplete="new-password" placeholder="請輸入密碼">
-            <label class="auth-label" for="registerConfirm">確認密碼</label>
-            <input type="password" id="registerConfirm" class="auth-input" autocomplete="new-password" placeholder="再次輸入密碼">
+            <label class="auth-label" for="registerEmail" data-i18n="register.email">電郵地址</label>
+            <input type="email" id="registerEmail" class="auth-input" autocomplete="email" data-i18n-placeholder="register.emailPh" placeholder="請輸入電郵地址">
+            <label class="auth-label" for="registerUsername" data-i18n="register.username">用戶名稱／顯示名稱（1–20 字元：中文字、英文字母、數字、空格）</label>
+            <input type="text" id="registerUsername" class="auth-input" maxlength="20" autocomplete="username" data-i18n-placeholder="register.usernamePh" placeholder="例如：小明 或 Bob123">
+            <label class="auth-label" for="registerPassword" data-i18n="register.password">密碼（至少 6 個字元）</label>
+            <input type="password" id="registerPassword" class="auth-input" autocomplete="new-password" data-i18n-placeholder="register.passwordPh" placeholder="請輸入密碼">
+            <label class="auth-label" for="registerConfirm" data-i18n="register.confirm">確認密碼</label>
+            <input type="password" id="registerConfirm" class="auth-input" autocomplete="new-password" data-i18n-placeholder="register.confirmPh" placeholder="再次輸入密碼">
             <p id="registerNotice" class="auth-notice"></p>
             <div class="auth-actions">
-              <button type="submit" class="btn btn-primary">註冊</button>
+              <button type="submit" class="btn btn-primary" data-i18n="btn.submitRegister">註冊</button>
             </div>
           </form>
           <div id="registerSuccessArea" class="auth-code-area hidden">
-            <p class="auth-success-text">註冊成功！你的用戶代碼：</p>
-            <div id="registerUserCode" class="auth-code-box"></div>
-            <p class="auth-hint">請記下此代碼（登入後亦會顯示於頁首）。</p>
-            <p class="auth-hint">注意：若已開啟電郵驗證（Confirm email），請先到電郵收件匣點擊確認連結，然後先可以登入。</p>
-            <button type="button" class="btn btn-success" onclick="proceedToLogin()">前往登入</button>
+            <p class="auth-success-text" data-i18n="auth.registerSuccessNote">註冊成功！請前往登入。</p>
+            <p class="auth-hint" data-i18n="auth.confirmHint">注意：若已開啟電郵驗證（Confirm email），請先到電郵收件匣點擊確認連結，然後先可以登入。</p>
+            <button type="button" class="btn btn-success" data-i18n="btn.goLogin" onclick="proceedToLogin()">前往登入</button>
           </div>
-          <p class="auth-switch">已有帳戶？<button type="button" class="auth-link-btn" onclick="showLoginPage()">返回登入</button></p>
+          <p class="auth-switch"><span data-i18n="register.switch">已有帳戶？</span><button type="button" class="auth-link-btn" data-i18n="btn.backLogin" onclick="showLoginPage()">返回登入</button></p>
         </div>
       </div>
     </section>
 
     <!-- 主頁 -->
     <section id="homePage" class="page">
-      <h2 class="page-title">主頁</h2>
+      <h2 class="page-title" data-i18n="page.home">主頁</h2>
       <div class="card-grid">
         <div class="big-card" onclick="goToMCPage()">
-          <span class="icon">📝</span>多項選擇題
+          <span class="icon">🔢</span><span data-i18n="card.mc">多項選擇題</span>
         </div>
-        <div class="big-card" onclick="goToTechPage()">
-          <span class="icon">🔬</span>學習前沿科技
+        <div class="big-card" onclick="goToLongQPage()">
+          <span class="icon">📝</span><span data-i18n="card.longq">長題目</span>
         </div>
         <div class="big-card" onclick="goToWrongPage()">
-          <span class="icon">📚</span>錯題重溫
+          <span class="icon">📚</span><span data-i18n="card.wrong">錯題重溫</span>
+        </div>
+        <div class="big-card" onclick="goToNotesPage()">
+          <span class="icon">📖</span><span data-i18n="card.notes">筆記</span>
         </div>
         <div class="big-card" onclick="goToRankingPage()">
-          <span class="icon">🏆</span>排行榜
+          <span class="icon">🏆</span><span data-i18n="card.ranking">排行榜</span>
+        </div>
+        <div class="big-card" onclick="goToTechPage()">
+          <span class="icon">🔬</span><span data-i18n="card.tech">學習前沿科技</span>
         </div>
       </div>
     </section>
 
     <!-- 多項選擇題頁面 -->
     <section id="mcPage" class="page hidden">
-      <h2 class="page-title">多項選擇題</h2>
+      <h2 class="page-title" data-i18n="page.mc">多項選擇題</h2>
       <div class="card-grid">
         <div class="big-card" onclick="goToPracticeMode()">
-          <span class="icon">✏️</span>練習模式
+          <span class="icon">✏️</span><span data-i18n="card.practice">練習模式</span>
         </div>
         <div class="big-card" onclick="goToChallengeMode()">
-          <span class="icon">⏱️</span>挑戰模式
+          <span class="icon">⏱️</span><span data-i18n="card.challenge">挑戰模式</span>
         </div>
       </div>
       <div class="actions">
-        <button class="btn btn-neutral" onclick="goHome()">返回主頁</button>
+        <button class="btn btn-neutral" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
       </div>
     </section>
 
     <!-- 練習模式：課題列表（按課題 / 按課本） -->
     <section id="practiceListPage" class="page hidden">
-      <h2 class="page-title">練習模式</h2>
-      <p class="sub">按課題（每課題 20 題）或按課本（整冊）練習</p>
+      <h2 class="page-title" data-i18n="page.practice">練習模式</h2>
+      <p class="sub" data-i18n="practice.subtitle">按課題（每課題 20 題）或按課本（整冊）練習</p>
       <div id="practiceSwitch" class="practice-switch" role="group" aria-label="練習列表切換">
-        <button class="practice-switch-btn active" data-mode="topic" onclick="setPracticeListMode('topic')">按課題</button>
-        <button class="practice-switch-btn" data-mode="book" onclick="setPracticeListMode('book')">按課本</button>
+        <button class="practice-switch-btn active" data-mode="topic" data-i18n="practice.switchTopic" onclick="setPracticeListMode('topic')">按課題</button>
+        <button class="practice-switch-btn" data-mode="book" data-i18n="practice.switchBook" onclick="setPracticeListMode('book')">按課本</button>
       </div>
       <p id="practiceListNotice"></p>
       <div id="practiceTopicList" class="topic-list"></div>
       <div id="practiceBookList" class="topic-list"></div>
       <div class="actions">
-        <button class="btn btn-neutral" onclick="goToMCPage()">返回多項選擇題</button>
+        <button class="btn btn-neutral" data-i18n="btn.backMC" onclick="goToMCPage()">返回多項選擇題</button>
       </div>
     </section>
 
     <!-- 練習模式：作答 -->
     <section id="practiceQuizPage" class="page hidden">
-      <h2 class="page-title">練習模式</h2>
+      <h2 class="page-title" data-i18n="page.practice">練習模式</h2>
       <p id="practiceMeta" class="meta"></p>
       <div id="practiceQuestionContainer" class="question-card"></div>
       <p id="practiceFeedback" class="feedback"></p>
       <div class="actions">
-        <button id="practiceNextBtn" class="btn btn-primary hidden" onclick="nextPractice()">下一題</button>
-        <button id="practiceAnalysisBtn" class="btn btn-success hidden" onclick="showPracticeAnalysis()">進入分析頁</button>
-        <button class="btn btn-neutral" onclick="goToPracticeMode()">返回課題列表</button>
+        <button id="practiceNextBtn" class="btn btn-primary hidden" data-i18n="btn.next" onclick="nextPractice()">下一題</button>
+        <button id="practiceAnalysisBtn" class="btn btn-success hidden" data-i18n="btn.analysis" onclick="showPracticeAnalysis()">進入分析頁</button>
+        <button class="btn btn-neutral" data-i18n="btn.backList" onclick="goToPracticeMode()">返回課題列表</button>
       </div>
     </section>
 
     <!-- 練習模式：分析頁 -->
     <section id="practiceAnalysisPage" class="page hidden">
-      <h2 class="page-title">練習分析</h2>
+      <h2 class="page-title" data-i18n="page.practiceAnalysis">練習分析</h2>
       <div id="practiceAnalysisContent" class="analysis-card"></div>
       <div class="actions">
-        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+        <button class="btn btn-primary" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
       </div>
     </section>
 
     <!-- 挑戰模式：作答 -->
     <section id="challengePage" class="page hidden">
-      <h2 class="page-title">挑戰模式</h2>
+      <h2 class="page-title" data-i18n="page.challenge">挑戰模式</h2>
       <div id="challengeTimerWrap" class="timer-wrap">
         <div class="timer-bar-bg">
           <div id="challengeTimerBar" class="timer-bar"></div>
@@ -897,51 +1135,148 @@
       <p id="challengeNotice"></p>
       <div id="challengeQuestionContainer" class="question-card"></div>
       <div class="actions">
-        <button id="challengePrevBtn" class="btn btn-neutral" onclick="prevChallenge()">上一題</button>
-        <button id="challengeNextBtn" class="btn btn-primary hidden" onclick="nextChallenge()">下一題</button>
-        <button id="challengeFinishBtn" class="btn btn-success hidden" onclick="finishChallenge()">完成</button>
-        <button class="btn btn-neutral" onclick="exitChallenge()">退出挑戰模式</button>
+        <button id="challengePrevBtn" class="btn btn-neutral" data-i18n="btn.prev" onclick="prevChallenge()">上一題</button>
+        <button id="challengeNextBtn" class="btn btn-primary hidden" data-i18n="btn.next" onclick="nextChallenge()">下一題</button>
+        <button id="challengeFinishBtn" class="btn btn-success hidden" data-i18n="btn.finish" onclick="finishChallenge()">完成</button>
+        <button class="btn btn-neutral" data-i18n="btn.exitChallenge" onclick="exitChallenge()">退出挑戰模式</button>
       </div>
     </section>
 
     <!-- 挑戰模式：分析頁 -->
     <section id="challengeAnalysisPage" class="page hidden">
-      <h2 class="page-title">挑戰分析</h2>
+      <h2 class="page-title" data-i18n="page.challengeAnalysis">挑戰分析</h2>
       <div id="challengeAnalysisContent" class="analysis-card"></div>
       <div class="actions">
-        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+        <button class="btn btn-primary" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
       </div>
     </section>
 
     <!-- 錯題重溫 -->
     <section id="wrongPage" class="page hidden">
-      <h2 class="page-title">錯題重溫</h2>
+      <h2 class="page-title" data-i18n="page.wrong">錯題重溫</h2>
       <p id="wrongNotice"></p>
-      <div id="wrongList" class="analysis-card"></div>
       <div class="actions">
-        <button class="btn btn-success" onclick="startWrongQuiz()">重溫作答</button>
-        <button class="btn btn-neutral" onclick="clearWrongList()">清空全部</button>
-        <button class="btn btn-neutral" onclick="goToMCPage()">返回多項選擇題</button>
-        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+        <button class="btn btn-success" data-i18n="btn.rework" onclick="startWrongQuiz()">重溫作答</button>
+        <button class="btn btn-neutral" data-i18n="btn.clearAll" onclick="clearWrongList()">清空全部</button>
+        <button class="btn btn-neutral" data-i18n="btn.backMC" onclick="goToMCPage()">返回多項選擇題</button>
+        <button class="btn btn-primary" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
       </div>
+      <div id="wrongList" class="analysis-card"></div>
     </section>
 
     <!-- 學習前沿科技 -->
     <section id="techPage" class="page hidden">
-      <h2 class="page-title">學習前沿科技</h2>
-      <div id="techContainer" class="tech-grid"></div>
+      <h2 class="page-title" data-i18n="page.tech">學習前沿科技</h2>
+      <div id="techContainer" class="tech-list"></div>
       <div class="actions">
-        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+        <button class="btn btn-primary" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
       </div>
     </section>
 
     <!-- 排行榜 -->
     <section id="rankingPage" class="page hidden">
-      <h2 class="page-title">排行榜</h2>
+      <h2 class="page-title" data-i18n="page.ranking">排行榜</h2>
       <p id="rankingNotice"></p>
       <div id="rankingList" class="ranking-list"></div>
       <div class="actions">
-        <button class="btn btn-primary" onclick="goHome()">返回主頁</button>
+        <button class="btn btn-primary" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
+      </div>
+    </section>
+
+    <!-- 筆記 -->
+    <section id="notesPage" class="page hidden">
+      <h2 class="page-title" data-i18n="page.notes">筆記</h2>
+      <p class="sub" data-i18n="notes.subtitle">按課題瀏覽點列式筆記，每課附兩條長題目（含參考答案）</p>
+      <div id="notesChapterList" class="topic-list"></div>
+      <div id="notesDetail" class="notes-detail hidden">
+        <button class="btn btn-neutral" data-i18n="btn.backList2" onclick="goToNotesList()">← 返回課題列表</button>
+        <div id="notesDetailContent"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
+      </div>
+    </section>
+
+    <!-- 長題目 -->
+    <section id="longQPage" class="page hidden">
+      <h2 class="page-title" data-i18n="page.longq">長題目</h2>
+      <p class="sub" data-i18n="longq.subtitle">按課題（每課題 15 題）或按課本（每冊 5 題跨課題綜合題）瀏覽長題目，含參考答案</p>
+      <div id="longQSwitch" class="practice-switch" role="group" aria-label="長題目列表切換">
+        <button class="practice-switch-btn active" data-mode="topic" data-i18n="practice.switchTopic" onclick="setLongQListMode('topic')">按課題</button>
+        <button class="practice-switch-btn" data-mode="book" data-i18n="practice.switchBook" onclick="setLongQListMode('book')">按課本</button>
+      </div>
+      <p id="longQNotice"></p>
+      <div id="longQTopicList" class="topic-list"></div>
+      <div id="longQBookList" class="topic-list"></div>
+      <div id="longQDetail" class="notes-detail hidden">
+        <button class="btn btn-neutral" data-i18n="btn.backList2" onclick="goToLongQList()">← 返回課題列表</button>
+        <div id="longQDetailContent"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
+      </div>
+    </section>
+
+    <!-- 設定 -->
+    <section id="settingsPage" class="page hidden">
+      <h2 class="page-title" data-i18n="page.settings">設定</h2>
+
+      <!-- 外觀 -->
+      <div class="settings-section">
+        <h3 class="settings-title" data-i18n="settings.appearance">外觀</h3>
+        <p class="sub" data-i18n="settings.appearanceDesc">選擇應用程式的顏色主題</p>
+        <div id="settingsThemeSelector" class="theme-selector" role="group" aria-label="顏色主題">
+          <button type="button" class="theme-select-btn" data-theme="light" onclick="setTheme('light')">☀️ <span data-i18n="settings.theme.light">淺色</span></button>
+          <button type="button" class="theme-select-btn" data-theme="dark" onclick="setTheme('dark')">🌙 <span data-i18n="settings.theme.dark">深色</span></button>
+          <button type="button" class="theme-select-btn" data-theme="warm" onclick="setTheme('warm')">🌇 <span data-i18n="settings.theme.warm">暖色</span></button>
+        </div>
+      </div>
+
+      <!-- 語言 -->
+      <div class="settings-section">
+        <h3 class="settings-title" data-i18n="settings.language">語言</h3>
+        <p class="sub" data-i18n="settings.languageDesc">選擇應用程式的顯示語言</p>
+        <div id="settingsLangSelector" class="lang-selector" role="group" aria-label="顯示語言">
+          <button type="button" class="lang-select-btn" data-lang="zh-HK" onclick="setAppLanguage('zh-HK')">中文（香港）</button>
+          <button type="button" class="lang-select-btn" data-lang="en" onclick="setAppLanguage('en')">English (UK)</button>
+        </div>
+      </div>
+
+      <!-- 用戶名稱 -->
+      <div class="settings-section">
+        <h3 class="settings-title" data-i18n="settings.name">用戶名稱</h3>
+        <p class="sub" data-i18n="settings.nameDesc">修改你的顯示名稱（1–20 字元）</p>
+        <div class="settings-row">
+          <input type="text" id="settingsNameInput" class="auth-input" maxlength="20" autocomplete="off" data-i18n-placeholder="settings.namePh" placeholder="請輸入新名稱">
+          <button type="button" class="btn btn-primary" data-i18n="settings.saveName" onclick="saveSettingsName()">儲存名稱</button>
+        </div>
+        <p id="settingsNameNotice" class="auth-notice"></p>
+      </div>
+
+      <!-- 電郵 -->
+      <div class="settings-section">
+        <h3 class="settings-title" data-i18n="settings.email">電郵</h3>
+        <p class="sub" data-i18n="settings.emailDesc">你的登入電郵地址</p>
+        <p id="settingsEmailDisplay" class="settings-email">—</p>
+      </div>
+
+      <!-- 危險區域 -->
+      <div class="settings-section danger-zone">
+        <h3 class="settings-title danger-title" data-i18n="settings.danger.title">危險區域</h3>
+        <p class="sub" data-i18n="settings.danger.desc">刪除帳戶將永久移除所有資料，此操作無法復原。</p>
+        <div id="deleteAccountArea">
+          <button type="button" id="deleteAccountBtn" class="btn btn-danger" data-i18n="settings.deleteAccount" onclick="requestDeleteAccount()">刪除帳戶</button>
+          <div id="deleteConfirmPanel" class="delete-confirm hidden">
+            <p class="delete-warning" data-i18n="settings.deleteConfirmMsg">你確定要永久刪除帳戶嗎？此操作無法復原。</p>
+            <button type="button" id="deleteConfirmBtn" class="btn btn-danger" data-i18n="settings.deleteConfirmYes" onclick="confirmDeleteAccount()">是，我確定刪除</button>
+            <button type="button" class="btn btn-neutral" data-i18n="settings.deleteCancel" onclick="cancelDeleteAccount()">取消</button>
+          </div>
+          <p id="deleteAccountNotice" class="auth-notice"></p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
       </div>
     </section>
 
@@ -949,13 +1284,29 @@
 
   <!-- Supabase JS SDK（CDN，純靜態友好） -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="topics.js"></script>
-  <script src="questionBank1.js"></script>
-  <script src="questionBank2.js"></script>
-  <script src="questionBank3.js"></script>
-  <script src="frontierTech.js"></script>
+  <!-- 本機腳本加入 ?v= 版本參數（cache-busting），確保瀏覽器載入更新後的檔案、不會沿用舊快取 -->
+  <script src="topics.js?v=0.6.4"></script>
+  <script src="questionBank1.js?v=0.6.4"></script>
+  <script src="questionBank2.js?v=0.6.4"></script>
+  <script src="questionBank3.js?v=0.6.4"></script>
+  <script src="frontierTech.js?v=0.6.4"></script>
+  <script src="longQuestions1.js?v=0.6.4"></script>
+  <script src="longQuestions2.js?v=0.6.4"></script>
+  <script src="longQuestions3.js?v=0.6.4"></script>
+  <script src="bookLongQuestions.js?v=0.6.4"></script>
+  <!-- English (UK) content banks（應用程式語言為 English (UK) 時載入，由 app.js 按語言選用） -->
+  <script src="topics.en.js?v=0.6.4"></script>
+  <script src="questionBank1.en.js?v=0.6.4"></script>
+  <script src="questionBank2.en.js?v=0.6.4"></script>
+  <script src="questionBank3.en.js?v=0.6.4"></script>
+  <script src="frontierTech.en.js?v=0.6.4"></script>
+  <script src="longQuestions1.en.js?v=0.6.4"></script>
+  <script src="longQuestions2.en.js?v=0.6.4"></script>
+  <script src="longQuestions3.en.js?v=0.6.4"></script>
+  <script src="bookLongQuestions.en.js?v=0.6.4"></script>
+  <script src="notes.js?v=0.6.4"></script>
   <!-- Supabase 專案設定（請先喺 supabaseConfig.js 填上 SUPABASE_URL 同 SUPABASE_ANON_KEY） -->
-  <script src="supabaseConfig.js"></script>
-  <script src="app.js"></script>
+  <script src="supabaseConfig.js?v=0.6.4"></script>
+  <script src="app.js?v=0.6.4"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 呢個程式已經由「瀏覽器端 localStorage 登入」遷移到 **Supabase（BaaS）** 後端：
 - 密碼由 Supabase 喺伺服器端用 **bcrypt** 雜湊及驗證（唔會再喺瀏覽器儲存任何明文密碼或帳戶清單）。
 - 每用戶嘅錯題儲存喺 `wrong_questions` 資料表，由 **Row Level Security（RLS）** 保護。
-- 用戶用**真實電郵 + 密碼**註冊／登入；另外填寫「用戶名稱／顯示名稱」，程式會自動由顯示名稱產生一個唯一嘅**用戶代碼**（`user_code`）。
+- 用戶用**真實電郵 + 密碼**註冊／登入；另外填寫「用戶名稱／顯示名稱」。**用戶代碼**（`user_code`）由 Supabase 後端觸發器自動產生並保密，**唔會喺介面顯示**（已從頁首、排行榜及註冊流程中移除）。
 
 跟住以下步驟即可完成設定。
 
@@ -37,12 +37,13 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOi...';            // 你嘅 anon/public key
 3. 撳 **Run**。
 
 呢段 SQL 會建立：
-- `public.profiles`（`id`、`username`（unique）、`user_code`（unique）、`created_at`）＋ `points` 積分欄（預設 0）
+- `public.profiles`（`id`、`username`（unique）、`user_code`（unique）、`created_at`）＋ `points` 積分欄（預設 0）—— `user_code` 由後端觸發器自動產生，前端唔會顯示
 - `public.wrong_questions`（`id`、`user_id`、`question_json`、`wrong_index`、`created_at`）＋ `user_id` index
 - `public.points_log`（每日積分記錄，`user_id` + `event_type` + `event_date` 唯一，確保「每日一次」）＋ `user_id` index
+- `public.quest_completions`（任務線完成記錄，`user_id` + `topic_no` 唯一，確保每帳戶每課題只可領取一次）＋ `user_id` index
 - 觸發函式 `handle_new_user()` 同觸發器 `on_auth_user_created`（註冊時自動由 `raw_user_meta_data` 建立 profiles）
-- 兩個 RPC 函式：`award_daily_login()`（每日登入 +10）同 `award_challenge_test(p_correct, p_total)`（每日第一次挑戰測試計分）
-- 三個表嘅 RLS 同政策（profiles 公開可讀；wrong_questions 同 points_log 只限本人）
+- 四個 RPC 函式：`award_daily_login()`（每日登入 +10）、`award_challenge_test(p_correct, p_total)`（每日第一次挑戰測試計分）、`award_quest_completion(p_topic_no)`（任務線完成課題 +25，每課題一次）同 `delete_account()`（設定頁刪除帳戶）
+- 四個表嘅 RLS 同政策（profiles 公開可讀；wrong_questions、points_log 同 quest_completions 只限本人）
 
 > 因為 SQL 已經做 idempotent 處理，之後想重新執行一次都冇問題；
 > 已建立嘅專案想升級加積分／排行榜功能，直接再執行一次新版 `schema.sql` 就得——`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 會安全補上 `points` 欄，唔會影響現有資料。
@@ -76,9 +77,27 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOi...';            // 你嘅 anon/public key
   - 每答對一題 +1 分（上限 36 分）；
   - 若全對（全部答啱）再額外 +4 分；
   - 同一日第二次或以後嘅挑戰測試唔會再加分。
+- **任務線（Quest Line）+25 分**：於「練習模式」按課題完成練習並**全部答對（20/20）**後，透過 RPC `award_quest_completion(p_topic_no)` 加分：
+  - 每完成一個課題（全對）獲得 **+25 分**，並喺課題名稱旁顯示 ✓；
+  - 每帳戶每課題**只可以領取一次**——由 `quest_completions` 表 `unique(user_id, topic_no)` 約束保證，重複完成唔會重複加分；
+  - 課本練習、錯題重溫同挑戰模式**唔會**觸發任務加分。
 - **排行榜**：主頁有「🏆 排行榜」入口，按 `profiles.points` 由高至低排列，顯示名次、用戶名稱、用戶代碼同積分；自己嗰行會特別標示（藍色框＋「（你）」）。頁首亦會顯示你嘅目前積分。
 
 > 所有加分操作都喺資料庫端（SECURITY DEFINER RPC）執行，並受 `points_log` 唯一約束保護，即使多人同時操作都唔會重複加分；若 RPC 失敗會安全回傳 0，唔會影響正常登入／答題。
+
+---
+
+## 設定頁（SETTINGS）
+
+程式加入「⚙️ 設定」頁（頁首右上角齒輪圖示），內容包括：
+
+- **外觀**：選擇顏色主題（☀️ 淺色 / 🌙 深色 / 🌇 暖色）。偏好儲存於瀏覽器 localStorage（`bioAppTheme`），與舊版一致；原頁首循環切換按鈕已移除。
+- **語言**：切換 **中文（香港）** 或 **English (UK)**。偏好儲存於 localStorage（`bioAppLanguage`）；切換後會自動重新載入頁面。
+- **用戶名稱**：修改顯示名稱（1–20 字元）。會更新 `profiles.username` 並同步 auth 元數據（`user_metadata.username`），頁首名稱即時更新。
+- **電郵**：顯示目前登入所使用的電郵地址（唯讀）。
+- **危險區域**：刪除帳戶。採用**雙重確認**（先按「刪除帳戶」→ 再按「是，我確定刪除」），經 RPC `delete_account()` 喺伺服器端刪除用戶；`profiles`、`wrong_questions`、`points_log`、`quest_completions` 會因外鍵 `on delete cascade` 自動一併刪除。
+
+> 注意：刪除帳戶係不可逆操作。RPC `delete_account()` 只會刪除自己（以 `auth.uid()` 驗證），由設定頁呼叫；執行 `schema.sql` 後方可用。
 
 ---
 
@@ -87,7 +106,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOi...';            // 你嘅 anon/public key
 ### 登入／註冊方式
 - **註冊欄位**：電郵地址、用戶名稱／顯示名稱、密碼、確認密碼。
 - **登入欄位**：電郵地址、密碼。
-- 用戶代碼（`user_code`）由舊有字典（`USER_CODE_DICT`）根據「用戶名稱／顯示名稱」自動產生，並保證喺所有用戶之間唯一（例如顯示名稱「小明」會對應一個固定嘅用戶代碼；若同另一個用戶撞碼，會自動加上 `-01`、`-02` 等後綴）。
+- 用戶代碼（`user_code`）由 Supabase 後端觸發器（`handle_new_user`）喺註冊時根據「用戶名稱／顯示名稱」自動產生，並保證喺所有用戶之間唯一；用戶代碼唔會喺前端產生或顯示（已從頁首、排行榜及註冊流程中移除）。
 
 ### 電郵驗證建議
 - 若關閉「Confirm email」（建議）：用戶註冊後即時登入，唔使去電郵收件匣撳確認連結。
