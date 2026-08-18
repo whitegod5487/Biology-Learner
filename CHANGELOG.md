@@ -8,6 +8,82 @@
 
 ---
 
+## v0.7.2（2026-08-19）
+**更新主題**：程式底部新增「2027 生物科 DSE 倒數」文字
+
+- **新增倒數計時器**：程式底部（所有頁面下方）以純文字顯示距離 **2027 年 4 月 19 日**生物科 DSE 嘅剩餘日數（例如「距離 2027 年生物科 DSE 還有 243 天」），以香港時間（UTC+8）計算，每日自動更新。
+- **純文字顯示（無外框）**：倒數以普通文字顯示，不設卡片外框／底色，與其他頁面內容融為一體。
+- [`index.html`](index.html) 底部新增 `.dse-countdown` 區塊（`#dseCountdownDays`／`#dseCountdownUnit`）及樣式。
+- [`app.js`](app.js) 新增 `renderCountdown()`：以香港時間計算今日日期並對比目標日期 2027-04-19，顯示剩餘日數；已過期則顯示 0。初始化時呼叫一次。新增中英 i18n 字串（`countdown.label`、`countdown.days`、`countdown.daysOne`，英文區分單數/複數）。
+- 版本更新為 `v0.7.2`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.7.2` cache-busting 參數。
+
+## v0.7.1（2026-08-19）
+**更新主題**：筆記新增英文（English UK）版本
+
+- **筆記英文版**：新增 [`notes.en.js`](notes.en.js)（`NOTES_EN`），將全部 37 個課題嘅筆記（章節標題、點列重點、兩條長題目及其參考答案）翻譯成英文（English UK），結構與 [`notes.js`](notes.js) 完全一致。
+- [`app.js`](app.js) 嘅 `NOTE_LIST` 改為按語言選用：English (UK) 時載入 `NOTES_EN`，中文（香港）時載入 `NOTES`，與其餘內容庫（課題／題目／前沿科技／長題目）嘅做法一致。
+- [`index.html`](index.html) 新增載入 `notes.en.js` 嘅 `<script>` 標籤。
+- 版本更新為 `v0.7.1`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.7.1` cache-busting 參數。
+
+## v0.7.0（2026-08-19）
+**更新主題**：新增「個人分數」獨立頁面（點擊頁首用戶名旁的分數進入）
+
+- **新增「個人分數」頁面**：點擊頁首用戶名旁的積分（`★ N`）即進入獨立分數頁面，顯示：
+  - **個人總分**：頁面頂部以大字顯示目前總分。
+  - **獲得分數紀錄**：以列表顯示每筆得分紀錄（日期、事件、得分），列表可點擊摺疊／展開；資料來源為 `points_log`（每日登入＋10、挑戰測試計分）與 `quest_completions`（任務線完成課題＋25）合併，按日期由新至舊排列。
+  - **獲取分數規則**：列表下方列出獲得積分嘅規則（每日登入、挑戰模式、任務線、連續登入）。
+- [`index.html`](index.html) 新增 `scorePage` 區段（總分、可摺疊紀錄列表、規則）及 `.score-summary`／`.score-record*`／`.score-rules` 等樣式；頁首積分 chip（`#currentUserPoints`）改為可點擊並加入 hover 效果。
+- [`app.js`](app.js) 新增 `goToScorePage()`、`renderScorePage()`、`toggleScoreRecords()`、`loadScoreRecords()`、`renderScoreRecords()`、`renderScoreRules()`，並將 `scorePage` 加入 `PAGE_IDS`；新增中英 i18n 字串（`page.score`、`score.*`）。
+- 版本更新為 `v0.7.0`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.7.0` cache-busting 參數。
+
+## v0.6.9（2026-08-19）
+**更新主題**：主頁「主頁」標題最右方新增「簽到」按鈕，無需重新登入即可更新連續登入天數
+
+- **新增「簽到」按鈕**：主頁標題「主頁」最右方加入「簽到」按鈕，點擊後即時更新連續登入天數及每日登入積分（等同重新登入嘅效果），唔使登出再登入。
+- **為何需要**：連續登入天數本來只喺登入／重新載入頁面還原登入時更新；新增按鈕後，已登入用戶可直接在主頁簽到。
+- [`app.js`](app.js) 新增 `checkInToday()`（呼叫 `awardDailyLogin()` 同 `updateLoginStreak()`，並以主頁提示顯示簽到結果），`renderLoginStreak()` 同步控制「簽到」按鈕顯示（訪客模式／未登入時隱藏）；新增中英 i18n 字串（`home.checkin`、`home.checkinSuccess`、`home.checkinFail`、`home.checkinNeedLogin`）。
+- [`index.html`](index.html) 主頁標題改為 flex 排版（`.home-title`），並新增「簽到」按鈕（`.check-in-btn`，置於標題最右方）及樣式。
+- 版本更新為 `v0.6.9`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.6.9` cache-busting 參數。
+
+## v0.6.8（2026-08-19）
+**更新主題**：主頁「主頁」二字旁新增「連續登入 N 天」顯示
+
+- **新增連續登入天數（Login Streak）**：主頁標題「主頁」二字旁顯示連續登入天數（例如「連續登入 3 天」），每日首次登入／還原登入時更新。
+- [`supabase/schema.sql`](supabase/schema.sql) 的 `profiles` 表新增 `last_login_date`（上次登入日期）與 `login_streak`（連續登入天數，預設 0）欄位，並新增 RPC `update_login_streak()`：今日已登入則天數不變、昨日有登入則 +1、否則重設為 1，回傳目前連續天數（idempotent，可放心重跑）。
+- [`app.js`](app.js) 登入／還原登入時呼叫 `updateLoginStreak()` 更新天數，並以 `renderLoginStreak()` 於主頁標題旁顯示；訪客模式／未登入／無數據時自動隱藏。新增中英 i18n 字串（`home.streak`）。
+- [`index.html`](index.html) 主頁標題改為「主頁 + 連續登入標籤」結構（標籤為獨立 `<span>`，避免被語言切換覆寫），並新增 `.login-streak` 樣式。
+- 版本更新為 `v0.6.8`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.6.8` cache-busting 參數。
+
+## v0.6.7（2026-08-19）
+**更新主題**：移除用戶代碼（user_code），改為在資料庫儲存電郵（email）
+
+- **移除用戶代碼（user_code）**：`profiles` 表刪除 `user_code` 欄，並移除後端 `utf8_codepoint()`／`generate_user_code()` 函式及相關唯一性邏輯。
+- **改為儲存電郵（email）**：`profiles` 表新增 `email` 欄，由 Supabase 觸發器（`handle_new_user`）在註冊時自動寫入 `auth.users.email`；已存在的記錄會以 `auth.users.email` 補填，並為 `email` 建立唯一約束。
+- [`supabase/schema.sql`](supabase/schema.sql) 以 idempotent 方式加入遷移（`drop column if exists user_code`、`add column if not exists email`、`drop function if exists`），可放心在 SQL Editor 重跑。
+- [`app.js`](app.js) 更新註冊錯誤訊息（移除「用戶編碼衝突」提示）及相關註解。
+- 版本更新為 `v0.6.7`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.6.7` cache-busting 參數。
+
+## v0.6.6（2026-08-19）
+**更新主題**：修復更改帳戶名稱後排行榜名稱不改變的問題
+
+- 修復在設定頁更改「用戶名稱」後，排行榜仍顯示舊名稱的問題。
+- **根本原因**：排行榜讀取 `profiles.username`（[`app.js`](app.js) 的 `loadRanking()`／`renderRanking()`），而更改名稱會更新 `profiles.username`；但 `profiles` 表啟用了 RLS 且**只有 SELECT 政策、沒有 UPDATE 政策**，令用戶無法更新自己記錄的 `username`，因此排行榜名稱不會更新（頁首名稱因讀取 auth 元數據而能正常更新）。
+- [`supabase/schema.sql`](supabase/schema.sql) 新增 `profiles_update_own` 政策（`using`/`with check (auth.uid() = id)`），允許用戶更新自己的記錄；部署時需在 SQL Editor 重新執行 `schema.sql`（idempotent，安全）。
+- 版本更新為 `v0.6.6`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.6.6` cache-busting 參數。
+
+## v0.6.5（2026-08-19）
+**更新主題**：新增「訪客模式」（Guest Mode）
+
+- 登入頁新增「以訪客模式使用」按鈕，**無需登入**即可使用大部分功能（練習、挑戰、長題目、筆記、前沿科技等）。
+- 訪客模式**不儲存任何資料到資料庫**：錯題、任務線完成記錄、積分等一律不會寫入 Supabase（相關 RPC 因沒有登入用戶而自動跳過）。
+- 訪客模式**不能使用「排行榜」與「錯題重溫」**：
+  - 主頁的「🏆 排行榜」與「📚 錯題重溫」兩張卡片**仍然保留顯示**；
+  - 訪客點擊時只會在主頁看到「此功能需要登入使用，請先登入或註冊帳戶」提示（數秒後自動消失），不會進入相關頁面。
+- 頁首顯示「訪客模式」標籤及「離開」按鈕，可隨時返回登入頁；設定頁在訪客模式下只顯示外觀與語言，隱藏用戶名稱／電郵／刪除帳戶等帳戶區塊。
+- 練習分析頁的任務線加分、挑戰分析頁的積分顯示，在訪客模式下不會出現（訪客不計分、不儲存資料）。
+- [`app.js`](app.js) 新增 `isGuestMode` 狀態與 `enterGuestMode()`、`exitGuestMode()`、`showHomeNotice()` 函式，並調整 `requireAuth()`、`updateAuthHeader()`、`goHome()`、`renderSettingsPage()`、`goToRankingPage()`、`goToWrongPage()` 等；[`index.html`](index.html) 新增訪客按鈕、頁首訪客標籤、主頁提示區及中英 i18n 字串。
+- 版本更新為 `v0.6.5`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.6.5` cache-busting 參數。
+
 ## v0.6.4（2026-08-19）
 **更新主題**：主頁交換「學習前沿科技」與「長題目」卡片位置（移除 v0.6.3 滑動橫幅）
 

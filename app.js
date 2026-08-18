@@ -26,7 +26,9 @@ const BOOK_LIST = IS_EN_BANK
   ? (typeof BOOKS_EN !== 'undefined' ? BOOKS_EN : [])
   : (typeof BOOKS !== 'undefined' ? BOOKS : []);
 
-const NOTE_LIST = typeof NOTES !== 'undefined' ? NOTES : [];
+const NOTE_LIST = IS_EN_BANK
+  ? (typeof NOTES_EN !== 'undefined' ? NOTES_EN : [])
+  : (typeof NOTES !== 'undefined' ? NOTES : []);
 
 // ---------- 長題目內容庫（按語言選用） ----------
 // 中文（香港）→ LQ1 / LQ2 / LQ3 / LQ_BOOKS；English (UK) → LQ1_EN / LQ2_EN / LQ3_EN / LQ_BOOKS_EN
@@ -40,11 +42,32 @@ const LQ_BY_BOOK = IS_EN_BANK
 
 // ---------- 版本（更新時記得同步 CHANGELOG.md） ----------
 // 每次更新後：1) 修改下方 APP_VERSION；2) 在 CHANGELOG.md 加入對應的版本記錄（見檔案末尾提醒）。
-const APP_VERSION = 'v0.6.4';
+const APP_VERSION = 'v0.7.2';
 
 function updateVersionLabel() {
   const el = document.getElementById('appVersionLabel');
   if (el) el.textContent = APP_VERSION;
+}
+
+// 渲染 2027 生物科 DSE 倒數（目標：2027 年 4 月 19 日，香港時間 UTC+8）
+function renderCountdown() {
+  const daysEl = document.getElementById('dseCountdownDays');
+  const unitEl = document.getElementById('dseCountdownUnit');
+  if (!daysEl) return;
+
+  // 以香港時間（UTC+8）計算「今天」的日期（避免瀏覽器時區差異）
+  const now = new Date();
+  const nowHk = new Date(now.getTime() + 8 * 3600 * 1000);
+  const startOfTodayHk = Date.UTC(nowHk.getUTCFullYear(), nowHk.getUTCMonth(), nowHk.getUTCDate());
+
+  // 目標：2027-04-19 00:00 UTC（即香港時間 2027-04-19 08:00）
+  const targetHk = Date.UTC(2027, 3, 19);
+
+  let days = Math.ceil((targetHk - startOfTodayHk) / (24 * 3600 * 1000));
+  if (days < 0) days = 0; // 已過期則顯示 0
+
+  daysEl.textContent = String(days);
+  if (unitEl) unitEl.textContent = (days === 1) ? t('countdown.daysOne') : t('countdown.days');
 }
 
 // ---------- 狀態變數 ----------
@@ -55,6 +78,8 @@ let practiceTopicNo = null;
 let practiceBookId = null; // 課本練習模式：目前練習的課本 id（null 表示按課題或錯題重溫）
 let wrongQuizActive = false; // 錯題重溫（重溫作答）模式旗標
 let practiceListMode = 'topic'; // 練習列表切換：'topic' 按課題 / 'book' 按課本
+let isGuestMode = false; // 訪客模式：無需登入、不儲存資料、停用排行榜與錯題重溫
+let homeNoticeTimer = null; // 主頁提示訊息自動隱藏計時器
 
 let challengeQuestions = [];
 let challengeIndex = 0;
@@ -121,6 +146,7 @@ const PAGE_IDS = [
   'notesPage',
   'longQPage',
   'rankingPage',
+  'scorePage',
   'settingsPage'
 ];
 
@@ -450,7 +476,8 @@ async function showPracticeAnalysis() {
   content.appendChild(line3);
 
   // 任務線：課題練習（非課本、非錯題重溫）全對 → 領取 +25 分（每課題一次）
-  const isTopicPractice = practiceTopicNo !== null && practiceBookId === null && !wrongQuizActive;
+  // 訪客模式不計分、不儲存資料，故不顯示任務線
+  const isTopicPractice = practiceTopicNo !== null && practiceBookId === null && !wrongQuizActive && !isGuestMode;
   if (isTopicPractice && total > 0 && correct === total) {
     const questLine = document.createElement('p');
     questLine.className = 'score points-award';
@@ -659,18 +686,21 @@ async function renderChallengeAnalysis() {
   content.appendChild(summary);
 
   // 挑戰測試積分（每日第一次測試先計分；非同步顯示，唔阻塞分析渲染）
-  const pointsLine = document.createElement('p');
-  pointsLine.className = 'score points-award';
-  pointsLine.textContent = t('challenge.pointsCalc');
-  content.appendChild(pointsLine);
+  // 訪客模式不計分、不儲存資料，故不顯示積分
+  if (!isGuestMode) {
+    const pointsLine = document.createElement('p');
+    pointsLine.className = 'score points-award';
+    pointsLine.textContent = t('challenge.pointsCalc');
+    content.appendChild(pointsLine);
 
-  awardChallengeTest(correct, total).then(function (earned) {
-    if (earned > 0) {
-      pointsLine.textContent = t('challenge.pointsEarned', { n: earned });
-    } else {
-      pointsLine.textContent = t('challenge.pointsNone');
-    }
-  });
+    awardChallengeTest(correct, total).then(function (earned) {
+      if (earned > 0) {
+        pointsLine.textContent = t('challenge.pointsEarned', { n: earned });
+      } else {
+        pointsLine.textContent = t('challenge.pointsNone');
+      }
+    });
+  }
 
   const saves = [];
 
@@ -802,6 +832,11 @@ async function clearWrongQuestions() {
 
 async function goToWrongPage() {
   if (!requireAuth()) return;
+  if (isGuestMode) { // 訪客模式：保留卡片，僅顯示登入提示
+    showPage('homePage');
+    showHomeNotice(t('guest.loginHint'));
+    return;
+  }
   stopChallenge();
   await renderWrongList();
   showPage('wrongPage');
@@ -1319,7 +1354,7 @@ function buildTechMcq(mcq, mi) {
 // 本程式改用 Supabase 作後端：
 //   - 密碼由 Supabase 於伺服器端以 bcrypt 雜湊及驗證，絕不儲存或傳送明文密碼。
 //   - 帳戶資料（profiles）與每用戶錯題（wrong_questions）均由 RLS 保護。
-//   - 登入／註冊使用「真實電郵 + 密碼」；用戶代碼（user_code）由 Supabase 觸發器於伺服器端自動產生，不會在前端產生或顯示。
+//   - 登入／註冊使用「真實電郵 + 密碼」；電郵由 Supabase 觸發器（handle_new_user）於伺服器端寫入 profiles.email（v0.6.7 起取代舊版 user_code）。
 //   - 主題設定（bioAppTheme）維持儲存於 localStorage（全局設定，屬預期行為）。
 
 let currentUser = null;          // 目前登入的 Supabase user 物件
@@ -1346,16 +1381,14 @@ function getCurrentUser() {
 function setCurrentUser(u) {
   currentUser = u || null;
   updateAuthHeader();
+  renderLoginStreak(); // 同步主頁「簽到」按鈕／連續登入標籤顯示狀態
 }
 
 function clearCurrentUser() {
   currentUser = null;
   updateAuthHeader();
+  renderLoginStreak(); // 同步主頁「簽到」按鈕／連續登入標籤顯示狀態
 }
-
-// ---------- 用戶代碼（user_code）----------
-// 用戶代碼由 Supabase 後端觸發器（handle_new_user）喺註冊時自動產生，
-// 前端唔再產生、傳送或顯示用戶代碼。
 
 function showAuthNotice(el, message, type) {
   if (!el) return;
@@ -1370,7 +1403,20 @@ function updateAuthHeader() {
   const userArea = document.getElementById('userArea');
   const nameEl = document.getElementById('currentUserName');
   const pointsEl = document.getElementById('currentUserPoints');
+  const guestArea = document.getElementById('guestArea');
   if (!userArea || !nameEl) return;
+
+  // 訪客模式：顯示訪客標籤，隱藏用戶區域
+  if (isGuestMode) {
+    cachedUserPoints = null;
+    userArea.classList.add('hidden');
+    nameEl.textContent = '—';
+    if (pointsEl) pointsEl.textContent = '—';
+    if (guestArea) guestArea.classList.remove('hidden');
+    return;
+  }
+  if (guestArea) guestArea.classList.add('hidden');
+
   const user = getCurrentUser();
   if (!user) {
     cachedUserPoints = null;
@@ -1433,9 +1479,49 @@ function showRegisterPage() {
 
 // 登入門檻：未登入時所有頁面導覽一律導向登入頁
 function requireAuth() {
+  if (isGuestMode) return true; // 訪客模式：無需登入即可使用
   if (getCurrentUser()) return true;
   showLoginPage();
   return false;
+}
+
+// ---------- 訪客模式（Guest Mode） ----------
+// 訪客模式：無需登入即可使用大部分功能；不儲存任何資料到資料庫。
+// 「排行榜」與「錯題重溫」兩張卡片仍然保留顯示，訪客點擊時只會看到
+// 「請登入使用此功能」提示，不會進入相關頁面。
+function enterGuestMode() {
+  stopChallenge();
+  isGuestMode = true;
+  currentUser = null;
+  clearWrongCache();
+  clearQuestCache();
+  cachedUserPoints = null;
+  updateAuthHeader();
+  showPage('homePage');
+}
+
+function exitGuestMode() {
+  stopChallenge();
+  isGuestMode = false;
+  currentUser = null;
+  clearWrongCache();
+  clearQuestCache();
+  cachedUserPoints = null;
+  updateAuthHeader();
+  showPage('loginPage');
+}
+
+// 在主頁顯示提示訊息（數秒後自動消失），例如訪客點擊排行榜／錯題重溫時
+function showHomeNotice(message) {
+  const el = document.getElementById('homeNotice');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('hidden');
+  if (homeNoticeTimer !== null) clearTimeout(homeNoticeTimer);
+  homeNoticeTimer = setTimeout(function () {
+    el.classList.add('hidden');
+    homeNoticeTimer = null;
+  }, 6000);
 }
 
 async function handleLogin(event) {
@@ -1473,6 +1559,7 @@ async function handleLogin(event) {
 
   setCurrentUser(data.user);
   await awardDailyLogin(); // 每日登入 +10（失敗亦唔阻塞登入）
+  await updateLoginStreak(); // 更新並顯示連續登入天數
   await migrateLegacyWrongQuestionsIfAny();
   await loadQuestCompletions(); // 預先載入任務線完成記錄
   if (emailEl) emailEl.value = '';
@@ -1546,8 +1633,8 @@ async function handleRegister(event) {
     let msg;
     if (/already registered|already been registered|already exists|user_already_exists|email.*(exist|registered)|registered.*email/.test(m)) {
       msg = '此電郵已被註冊。';
-    } else if (/duplicate|conflict|unique|user_code/.test(m)) {
-      msg = '用戶編碼衝突，請重試。';
+    } else if (/duplicate|conflict|unique/.test(m)) {
+      msg = '資料重複或衝突，請重試。';
     } else if (/rate.?limit|too many|429/.test(m)) {
       msg = '嘗試次數過多，請稍後再試（' + (error.message || '') + '）。';
     } else {
@@ -1581,6 +1668,10 @@ function proceedToLogin() {
 }
 
 async function logout() {
+  if (isGuestMode) {
+    exitGuestMode();
+    return;
+  }
   if (!getCurrentUser()) {
     showLoginPage();
     return;
@@ -1664,6 +1755,7 @@ async function initAuth() {
       await loadWrongQuestions(); // 預先載入錯題快取
       await loadQuestCompletions(); // 預先載入任務線完成記錄
       await awardDailyLogin(); // 還原登入狀態 → 每日登入 +10
+      await updateLoginStreak(); // 還原登入狀態 → 更新並顯示連續登入天數
       updateAuthHeader();
       showPage('homePage');
     } else {
@@ -1685,6 +1777,7 @@ async function initAuth() {
 //     （由 DB 端 RPC award_challenge_test 保證每日只計第一次）
 //   - 排行榜頁面讀取 profiles.points 排序顯示
 let cachedUserPoints = null; // 頁首積分快取（避免每次切頁都打 API）
+let cachedLoginStreak = null; // 主頁連續登入天數快取
 
 // 每日登入積分：呼叫 RPC award_daily_login，回傳實際獲得嘅積分
 async function awardDailyLogin() {
@@ -1698,6 +1791,64 @@ async function awardDailyLogin() {
   } catch (e) {
     // 失敗時靜默忽略，唔影響登入流程
     return 0;
+  }
+}
+
+// 更新並取得連續登入天數：呼叫 RPC update_login_streak，回傳目前連續天數
+// （失敗或未登入時回傳 0，並靜默略過）
+async function updateLoginStreak() {
+  if (!supabaseReady || !sb || !getCurrentUser()) {
+    cachedLoginStreak = null;
+    renderLoginStreak();
+    return 0;
+  }
+  try {
+    const { data, error } = await sb.rpc('update_login_streak');
+    if (error) {
+      cachedLoginStreak = null;
+      renderLoginStreak();
+      return 0;
+    }
+    cachedLoginStreak = typeof data === 'number' ? data : 0;
+    renderLoginStreak();
+    return cachedLoginStreak;
+  } catch (e) {
+    // 失敗時靜默忽略，唔影響登入流程
+    cachedLoginStreak = null;
+    renderLoginStreak();
+    return 0;
+  }
+}
+
+// 在主頁標題旁顯示「連續登入 N 天」；未登入／訪客模式／無數據時隱藏。
+// 同時控制「簽到」按鈕：只有已登入（非訪客）先顯示。
+function renderLoginStreak() {
+  const el = document.getElementById('loginStreakLabel');
+  const btn = document.getElementById('checkInBtn');
+  const loggedIn = !isGuestMode && !!getCurrentUser();
+  if (btn) btn.classList.toggle('hidden', !loggedIn);
+  if (!el) return;
+  if (!loggedIn || !cachedLoginStreak) {
+    el.textContent = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.textContent = t('home.streak', { n: cachedLoginStreak });
+  el.classList.remove('hidden');
+}
+
+// 簽到按鈕：唔使重新登入，即時更新連續登入天數（等同重新登入嘅效果）
+async function checkInToday() {
+  if (isGuestMode || !getCurrentUser()) {
+    showHomeNotice(t('home.checkinNeedLogin'));
+    return;
+  }
+  await awardDailyLogin(); // 每日登入 +10（等同重新登入，失敗亦唔阻塞）
+  const streak = await updateLoginStreak(); // 更新並顯示連續登入天數
+  if (streak > 0) {
+    showHomeNotice(t('home.checkinSuccess', { n: streak }));
+  } else {
+    showHomeNotice(t('home.checkinFail'));
   }
 }
 
@@ -1742,6 +1893,141 @@ async function refreshUserPoints() {
   }
 }
 
+// ---------- 個人分數頁（SCORE） ----------
+let scoreRecordsCollapsed = false; // 分數紀錄列表摺疊狀態
+
+// 前往個人分數頁（需要登入）
+async function goToScorePage() {
+  if (!requireAuth()) return;
+  if (isGuestMode) { // 訪客模式：不儲存資料，無個人分數
+    showPage('homePage');
+    showHomeNotice(t('guest.loginHint'));
+    return;
+  }
+  stopChallenge();
+  await renderScorePage();
+  showPage('scorePage');
+}
+
+// 渲染個人分數頁：總分 + 分數紀錄列表 + 獲取分數規則
+async function renderScorePage() {
+  const summaryEl = document.getElementById('scoreBig');
+  await refreshUserPoints(); // 刷新總分
+  if (summaryEl) {
+    summaryEl.textContent = (cachedUserPoints === null || cachedUserPoints === undefined)
+      ? '—'
+      : ('★ ' + cachedUserPoints);
+  }
+  const records = await loadScoreRecords();
+  renderScoreRecords(records);
+  renderScoreRules();
+  // 重設摺疊狀態為展開
+  scoreRecordsCollapsed = false;
+  const wrap = document.getElementById('scoreRecordsWrap');
+  const icon = document.getElementById('scoreRecordsToggleIcon');
+  if (wrap) wrap.classList.remove('collapsed');
+  if (icon) icon.textContent = '▼';
+}
+
+// 摺疊／展開分數紀錄列表
+function toggleScoreRecords() {
+  scoreRecordsCollapsed = !scoreRecordsCollapsed;
+  const wrap = document.getElementById('scoreRecordsWrap');
+  const icon = document.getElementById('scoreRecordsToggleIcon');
+  if (wrap) wrap.classList.toggle('collapsed', scoreRecordsCollapsed);
+  if (icon) icon.textContent = scoreRecordsCollapsed ? '▶' : '▼';
+}
+
+// 讀取分數紀錄（points_log + quest_completions 合併，按日期由新至舊）
+async function loadScoreRecords() {
+  const user = getCurrentUser();
+  if (!user || !sb || !supabaseReady) return [];
+  const records = [];
+  try {
+    const { data, error } = await sb
+      .from('points_log')
+      .select('event_type, points, event_date')
+      .eq('user_id', user.id)
+      .order('event_date', { ascending: false });
+    if (!error && data) {
+      data.forEach(function (r) {
+        records.push({
+          date: r.event_date,
+          label: t('score.event.' + r.event_type),
+          points: r.points
+        });
+      });
+    }
+  } catch (e) { /* 忽略 */ }
+  try {
+    const { data, error } = await sb
+      .from('quest_completions')
+      .select('topic_no, points, completed_at')
+      .eq('user_id', user.id)
+      .order('completed_at', { ascending: false });
+    if (!error && data) {
+      data.forEach(function (r) {
+        const tpc = (typeof r.topic_no === 'number') ? topicName(r.topic_no) : '';
+        records.push({
+          date: (r.completed_at || '').slice(0, 10),
+          label: t('score.event.quest') + (tpc ? '：' + tpc : ''),
+          points: r.points
+        });
+      });
+    }
+  } catch (e) { /* 忽略 */ }
+  // 排序：日期由新至舊；同一日按積分高至低
+  records.sort(function (a, b) {
+    if (a.date !== b.date) return String(a.date) < String(b.date) ? 1 : -1;
+    return (b.points || 0) - (a.points || 0);
+  });
+  return records;
+}
+
+// 渲染分數紀錄列表（空時顯示提示）
+function renderScoreRecords(records) {
+  const container = document.getElementById('scoreRecordsList');
+  if (!container) return;
+  container.innerHTML = '';
+  if (!records || !records.length) {
+    const empty = document.createElement('div');
+    empty.className = 'score-record';
+    empty.innerHTML = '<span class="score-record-label">' + t('score.noRecords') + '</span>';
+    container.appendChild(empty);
+    return;
+  }
+  records.forEach(function (r) {
+    const row = document.createElement('div');
+    row.className = 'score-record';
+    row.innerHTML =
+      '<span class="score-record-label"></span>' +
+      '<span class="score-record-date"></span>' +
+      '<span class="score-record-points"></span>';
+    row.querySelector('.score-record-label').textContent = r.label;
+    row.querySelector('.score-record-date').textContent = r.date || '';
+    row.querySelector('.score-record-points').textContent = '+' + r.points;
+    container.appendChild(row);
+  });
+}
+
+// 渲染「獲取分數規則」靜態列表
+function renderScoreRules() {
+  const container = document.getElementById('scoreRules');
+  if (!container) return;
+  const rules = [
+    t('score.rule.dailyLogin'),
+    t('score.rule.challenge'),
+    t('score.rule.quest'),
+    t('score.rule.streak')
+  ];
+  container.innerHTML = '';
+  rules.forEach(function (text) {
+    const li = document.createElement('li');
+    li.textContent = text;
+    container.appendChild(li);
+  });
+}
+
 // 讀取排行榜：按積分由高至低排序，回傳 rows 或空陣列
 async function loadRanking(limit) {
   if (!supabaseReady || !sb) return [];
@@ -1761,6 +2047,11 @@ async function loadRanking(limit) {
 // 前往排行榜頁面（需要登入）
 async function goToRankingPage() {
   if (!requireAuth()) return;
+  if (isGuestMode) { // 訪客模式：保留卡片，僅顯示登入提示
+    showPage('homePage');
+    showHomeNotice(t('guest.loginHint'));
+    return;
+  }
   stopChallenge();
   await renderRanking();
   showPage('rankingPage');
@@ -2059,6 +2350,9 @@ var I18N = {
     'btn.login': '登入',
     'login.switch': '還沒有帳戶？',
     'btn.register': '註冊新帳戶',
+    'login.or': '—— 或 ——',
+    'btn.guestMode': '以訪客模式使用',
+    'guest.hint': '無需登入即可使用；不儲存任何資料，亦不提供排行榜與錯題重溫。',
 
     // 註冊
     'page.register': '註冊新帳戶',
@@ -2079,6 +2373,27 @@ var I18N = {
 
     // 頁面標題 / 卡片
     'page.home': '主頁',
+    'home.streak': '連續登入 {n} 天',
+    'home.checkin': '簽到',
+    'home.checkinSuccess': '✅ 簽到成功！連續登入 {n} 天',
+    'home.checkinFail': '簽到失敗，請稍後再試',
+    'home.checkinNeedLogin': '請先登入後再簽到',
+    'page.score': '個人分數',
+    'score.headerHint': '點擊查看個人分數',
+    'score.totalLabel': '我的總分',
+    'score.recordsTitle': '獲得分數紀錄',
+    'score.rulesTitle': '獲取分數規則',
+    'score.noRecords': '暫時未有分數紀錄，快啲去練習同挑戰攞分啦！',
+    'score.event.daily_login': '每日登入',
+    'score.event.challenge_test': '挑戰測試',
+    'score.event.quest': '任務線',
+    'score.rule.dailyLogin': '每日登入：+10 分（每日一次）',
+    'score.rule.challenge': '挑戰模式：每日第一次測試，每答對一題 +1（上限 36），全對額外 +4',
+    'score.rule.quest': '任務線：按課題完成練習並全對（20/20）：+25 分（每課題一次）',
+    'score.rule.streak': '連續登入：每日登入日數會顯示喺主頁「主頁」旁',
+    'countdown.label': '距離 2027 年生物科 DSE 還有',
+    'countdown.days': '天',
+    'countdown.daysOne': '天',
     'card.mc': '多項選擇題',
     'card.tech': '學習前沿科技',
     'card.wrong': '錯題重溫',
@@ -2203,6 +2518,10 @@ var I18N = {
     'auth.retry': '請重試。',
     'auth.registerSuccess': '註冊成功，請使用密碼登入。',
     'logout.confirm': '確定要登出嗎？',
+    'guest.badge': '訪客模式',
+    'btn.exitGuest': '離開',
+    'guest.settingsNotice': '你正以訪客模式使用，帳戶相關功能已停用。',
+    'guest.loginHint': '此功能需要登入使用，請先登入或註冊帳戶。',
 
     // 設定頁
     'page.settings': '設定',
@@ -2249,6 +2568,9 @@ var I18N = {
     'btn.login': 'Log In',
     'login.switch': 'Don\'t have an account?',
     'btn.register': 'Register',
+    'login.or': '—— or ——',
+    'btn.guestMode': 'Use as Guest',
+    'guest.hint': 'No login required; saves no data and does not include the Leaderboard or Wrong Questions.',
 
     // Register
     'page.register': 'Register a new account',
@@ -2269,6 +2591,27 @@ var I18N = {
 
     // Page titles / cards
     'page.home': 'Home',
+    'home.streak': 'Login streak: {n} day(s)',
+    'home.checkin': 'Check in',
+    'home.checkinSuccess': '✅ Checked in! Login streak: {n} day(s)',
+    'home.checkinFail': 'Check-in failed. Please try again later.',
+    'home.checkinNeedLogin': 'Please log in first to check in.',
+    'page.score': 'My Score',
+    'score.headerHint': 'Click to view your score',
+    'score.totalLabel': 'My Total Score',
+    'score.recordsTitle': 'Score History',
+    'score.rulesTitle': 'How to Earn Points',
+    'score.noRecords': 'No score records yet. Try practising and challenging to earn points!',
+    'score.event.daily_login': 'Daily login',
+    'score.event.challenge_test': 'Challenge test',
+    'score.event.quest': 'Quest line',
+    'score.rule.dailyLogin': 'Daily login: +10 points (once per day)',
+    'score.rule.challenge': 'Challenge mode: first attempt each day, +1 per correct answer (max 36), +4 bonus for full marks',
+    'score.rule.quest': 'Quest line: complete a topic practice with all correct (20/20): +25 points (once per topic)',
+    'score.rule.streak': 'Login streak: your consecutive login days are shown next to the home page title',
+    'countdown.label': '2027 Biology DSE is in',
+    'countdown.days': 'days',
+    'countdown.daysOne': 'day',
     'card.mc': 'Multiple Choice',
     'card.tech': 'Frontier Technology',
     'card.wrong': 'Wrong Questions',
@@ -2393,6 +2736,10 @@ var I18N = {
     'auth.retry': 'Please try again.',
     'auth.registerSuccess': 'Registration successful. Please log in.',
     'logout.confirm': 'Are you sure you want to log out?',
+    'guest.badge': 'Guest Mode',
+    'btn.exitGuest': 'Exit',
+    'guest.settingsNotice': 'You are in Guest Mode; account features are disabled.',
+    'guest.loginHint': 'This feature requires logging in. Please log in or register an account.',
 
     // Settings page
     'page.settings': 'Settings',
@@ -2489,6 +2836,18 @@ function goToSettingsPage() {
 
 function renderSettingsPage() {
   var user = getCurrentUser();
+
+  // 訪客模式：只顯示外觀／語言，隱藏帳戶相關區塊
+  var nameSection = document.getElementById('settingsNameSection');
+  var emailSection = document.getElementById('settingsEmailSection');
+  var dangerSection = document.getElementById('settingsDangerSection');
+  var guestNotice = document.getElementById('settingsGuestNotice');
+  var showAccount = !isGuestMode;
+  if (nameSection) nameSection.classList.toggle('hidden', !showAccount);
+  if (emailSection) emailSection.classList.toggle('hidden', !showAccount);
+  if (dangerSection) dangerSection.classList.toggle('hidden', !showAccount);
+  if (guestNotice) guestNotice.classList.toggle('hidden', !isGuestMode);
+
   updateLanguageSelector();
   updateThemeButton(document.documentElement.getAttribute('data-theme'));
   var nameEl = document.getElementById('settingsNameInput');
@@ -2623,4 +2982,5 @@ initTheme();
 initLanguage();
 updateAuthHeader();
 updateVersionLabel();
+renderCountdown(); // 2027 生物科 DSE 倒數（顯示於程式底部）
 initAuth(); // 非同步：檢查登入狀態並載入錯題快取（未設定 Supabase 時會顯示設定提示）
