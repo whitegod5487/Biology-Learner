@@ -42,7 +42,7 @@ const LQ_BY_BOOK = IS_EN_BANK
 
 // ---------- 版本（更新時記得同步 CHANGELOG.md） ----------
 // 每次更新後：1) 修改下方 APP_VERSION；2) 在 CHANGELOG.md 加入對應的版本記錄（見檔案末尾提醒）。
-const APP_VERSION = 'v0.7.2';
+const APP_VERSION = 'v0.9.9';
 
 function updateVersionLabel() {
   const el = document.getElementById('appVersionLabel');
@@ -143,11 +143,14 @@ const PAGE_IDS = [
   'challengeAnalysisPage',
   'wrongPage',
   'techPage',
+  'faqPage',
+  'bugPage',
   'notesPage',
   'longQPage',
   'rankingPage',
   'scorePage',
-  'settingsPage'
+  'settingsPage',
+  'dsePage'
 ];
 
 function showPage(pageId) {
@@ -163,6 +166,7 @@ function showPage(pageId) {
 function goHome() {
   if (!requireAuth()) return;
   stopChallenge();
+  stopDseTimer();
   goToNotesList();
   goToLongQList();
   showPage('homePage');
@@ -191,6 +195,295 @@ function goToTechPage() {
   stopChallenge();
   renderTechPage();
   showPage('techPage');
+}
+
+// ---------- 常見問題 FAQ ----------
+function goToFaqPage() {
+  if (!requireAuth()) return;
+  stopChallenge();
+  renderFaqPage();
+  showPage('faqPage');
+}
+
+// FAQ 項目定義於 faq.js（獨立資料檔，仿照長題目資料檔）：
+// const FAQ_ITEMS = [ { q: {zh,en}, a: {zh,en}, link?: {url, label:{zh,en}} } ]
+
+function renderFaqPage() {
+  const container = document.getElementById('faqContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  const items = (typeof FAQ_ITEMS !== 'undefined') ? FAQ_ITEMS : [];
+  if (!items.length) {
+    const p = document.createElement('p');
+    p.className = 'notice';
+    p.textContent = t('faq.noContent');
+    container.appendChild(p);
+    return;
+  }
+  items.forEach(function (item, index) {
+    container.appendChild(buildFaqItem(item, index));
+  });
+}
+
+// 可摺疊 FAQ 項目（重用 tech-list 樣式）
+function buildFaqItem(item, index) {
+  const wrap = document.createElement('div');
+  wrap.className = 'tech-list-item';
+
+  const header = document.createElement('button');
+  header.type = 'button';
+  header.className = 'tech-list-header';
+  header.setAttribute('aria-expanded', 'false');
+
+  const headerText = document.createElement('span');
+  headerText.className = 'tech-list-header-text';
+
+  const num = document.createElement('span');
+  num.className = 'tech-list-num';
+  num.textContent = 'Q' + String(index + 1);
+
+  const titleWrap = document.createElement('span');
+  titleWrap.className = 'tech-list-title-wrap';
+
+  const title = document.createElement('span');
+  title.className = 'tech-list-title';
+  title.textContent = pickL(item.q);
+
+  titleWrap.appendChild(title);
+  headerText.appendChild(num);
+  headerText.appendChild(titleWrap);
+
+  const arrow = document.createElement('span');
+  arrow.className = 'tech-list-arrow';
+  arrow.textContent = '▸';
+
+  header.appendChild(headerText);
+  header.appendChild(arrow);
+
+  const body = document.createElement('div');
+  body.className = 'tech-list-body hidden';
+
+  const answer = document.createElement('p');
+  answer.className = 'faq-answer';
+  answer.textContent = pickL(item.a);
+  body.appendChild(answer);
+
+  // 可選的外部連結（如 DeepSeek 官方網站）
+  if (item.link) {
+    const link = document.createElement('a');
+    link.className = 'btn btn-source';
+    link.href = item.link.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = pickL(item.link.label);
+    body.appendChild(link);
+  }
+
+  header.onclick = function () {
+    const isHidden = body.classList.toggle('hidden');
+    header.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+    arrow.textContent = isHidden ? '▸' : '▾';
+    wrap.classList.toggle('expanded', !isHidden);
+  };
+
+  wrap.appendChild(header);
+  wrap.appendChild(body);
+  return wrap;
+}
+
+// ---------- Bug 回報 ----------
+let bugStatuses = [];
+let bugStatusMap = {};
+
+function goToBugPage() {
+  if (!requireAuth()) return;
+  stopChallenge();
+  stopDseTimer();
+  showPage('bugPage');
+  renderBugPage();
+}
+
+// 讀取資料庫可設定的狀態列表（bug_report_statuses，管理員可在資料庫增刪改）
+async function loadBugStatuses() {
+  if (!supabaseReady || !sb) return;
+  try {
+    const { data, error } = await sb
+      .from('bug_report_statuses')
+      .select('code, label_zh, label_en, color, sort_order, is_active')
+      .order('sort_order', { ascending: true });
+    if (error) return;
+    bugStatuses = (data || []).filter(function (s) { return s.is_active !== false; });
+    bugStatusMap = {};
+    bugStatuses.forEach(function (s) { bugStatusMap[s.code] = s; });
+  } catch (e) {}
+}
+
+function bugStatusLabel(statusCode) {
+  const s = bugStatusMap[statusCode];
+  if (!s) return statusCode || '—';
+  return getAppLanguage() === 'en' ? (s.label_en || s.label_zh || statusCode) : (s.label_zh || s.label_en || statusCode);
+}
+
+function bugStatusColor(statusCode) {
+  const s = bugStatusMap[statusCode];
+  return (s && s.color) ? s.color : '#6b7280';
+}
+
+async function renderBugPage() {
+  await loadBugStatuses();
+  loadBugReports();
+}
+
+async function getCurrentUsername() {
+  const user = getCurrentUser();
+  if (!user || !supabaseReady || !sb) return null;
+  try {
+    const { data, error } = await sb
+      .from('profiles')
+      .select('username')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data.username || null;
+  } catch (e) { return null; }
+}
+
+// 提交 Bug 回報（存到資料庫 bug_reports，狀態預設 new）
+async function submitBugReport(event) {
+  if (event) event.preventDefault();
+  const titleEl = document.getElementById('bugTitle');
+  const catEl = document.getElementById('bugCategory');
+  const descEl = document.getElementById('bugDescription');
+  const stepsEl = document.getElementById('bugSteps');
+  const noticeEl = document.getElementById('bugFormNotice');
+  const btn = document.getElementById('bugSubmitBtn');
+
+  const user = getCurrentUser();
+  if (!user || !supabaseReady || !sb) return;
+
+  const title = ((titleEl && titleEl.value) || '').trim();
+  const desc = ((descEl && descEl.value) || '').trim();
+  if (!title || !desc) {
+    if (noticeEl) noticeEl.textContent = t('bug.fillRequired');
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  try {
+    const username = await getCurrentUsername();
+    const { error } = await sb.from('bug_reports').insert({
+      user_id: user.id,
+      username: username,
+      title: title,
+      category: (catEl && catEl.value) || 'other',
+      description: desc,
+      steps: ((stepsEl && stepsEl.value.trim()) || null),
+      status_code: 'new'
+    });
+    if (error) {
+      if (noticeEl) noticeEl.textContent = t('bug.submitFailed');
+      return;
+    }
+    if (noticeEl) noticeEl.textContent = t('bug.submitted');
+    if (titleEl) titleEl.value = '';
+    if (descEl) descEl.value = '';
+    if (stepsEl) stepsEl.value = '';
+    loadBugReports();
+  } catch (e) {
+    if (noticeEl) noticeEl.textContent = t('bug.submitFailed');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// 讀取我的回報並顯示狀態
+async function loadBugReports() {
+  const container = document.getElementById('bugReportsList');
+  const user = getCurrentUser();
+  if (!container || !user || !supabaseReady || !sb) return;
+  container.innerHTML = '<p class="meta">' + t('bug.loading') + '</p>';
+  try {
+    const { data, error } = await sb
+      .from('bug_reports')
+      .select('id, title, category, description, steps, status_code, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    if (error) {
+      container.innerHTML = '<p class="notice">' + t('bug.loadFailed') + '</p>';
+      return;
+    }
+    renderBugReports(container, data || []);
+  } catch (e) {
+    container.innerHTML = '<p class="notice">' + t('bug.loadFailed') + '</p>';
+  }
+}
+
+function renderBugReports(container, reports) {
+  container.innerHTML = '';
+  if (!reports.length) {
+    const p = document.createElement('p');
+    p.className = 'notice';
+    p.textContent = t('bug.noReports');
+    container.appendChild(p);
+    return;
+  }
+  reports.forEach(function (r) {
+    container.appendChild(buildBugReportItem(r));
+  });
+}
+
+function buildBugReportItem(r) {
+  const item = document.createElement('div');
+  item.className = 'bug-report-item';
+
+  const head = document.createElement('div');
+  head.className = 'bug-report-head';
+
+  const title = document.createElement('span');
+  title.className = 'bug-report-title';
+  title.textContent = '#' + r.id + ' ' + (r.title || t('bug.untitled'));
+
+  const badge = document.createElement('span');
+  badge.className = 'bug-status-badge';
+  badge.style.backgroundColor = bugStatusColor(r.status_code);
+  badge.textContent = bugStatusLabel(r.status_code);
+
+  head.appendChild(title);
+  head.appendChild(badge);
+
+  const meta = document.createElement('p');
+  meta.className = 'meta';
+  meta.textContent = t('bug.category.' + (r.category || 'other')) + ' · ' + bugFormatDate(r.created_at);
+  item.appendChild(head);
+  item.appendChild(meta);
+
+  const desc = document.createElement('p');
+  desc.className = 'bug-report-desc';
+  desc.textContent = r.description || '';
+  item.appendChild(desc);
+
+  if (r.steps) {
+    const stepsLabel = document.createElement('p');
+    stepsLabel.className = 'meta';
+    stepsLabel.textContent = t('bug.stepsLabel');
+    const steps = document.createElement('p');
+    steps.className = 'bug-report-desc';
+    steps.textContent = r.steps;
+    item.appendChild(stepsLabel);
+    item.appendChild(steps);
+  }
+
+  return item;
+}
+
+function bugFormatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
 }
 
 function exitChallenge() {
@@ -1160,7 +1453,509 @@ function buildLongQBlock(lq, i) {
   };
   block.appendChild(btn);
 
+  // AI 批改（DeepSeek）區塊
+  block.appendChild(buildDeepSeekBlock(lq, i));
+
   return block;
+}
+
+// ---------- 長題目 AI 批改（DeepSeek） ----------
+// 用戶可喺設定頁填入 DeepSeek API Key（只儲存於本機瀏覽器 localStorage：bioAppDeepSeekKey），
+// 然後喺長題目頁輸入自己嘅作答，交由 DeepSeek 按「題目＋參考答案＋分數」批改評分並畀建議。
+function getDeepSeekKey() {
+  try {
+    return localStorage.getItem('bioAppDeepSeekKey') || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function saveDeepSeekKey() {
+  const inputEl = document.getElementById('settingsDeepSeekKeyInput');
+  const noticeEl = document.getElementById('settingsDeepSeekNotice');
+  if (!inputEl || !noticeEl) return;
+  const key = inputEl.value.trim();
+  try {
+    if (key) {
+      localStorage.setItem('bioAppDeepSeekKey', key);
+    } else {
+      localStorage.removeItem('bioAppDeepSeekKey');
+    }
+  } catch (e) {
+    showAuthNotice(noticeEl, t('deepseek.saveErr'), 'error');
+    return;
+  }
+  showAuthNotice(noticeEl, t('deepseek.saved'), 'success');
+  const statusEl = document.getElementById('settingsDeepSeekStatus');
+  if (statusEl) statusEl.textContent = key ? t('deepseek.statusSet') : t('deepseek.statusEmpty');
+}
+
+// 喺每題長題目下方建立 AI 批改 UI（作答輸入框 + 提交批改按鈕 + 結果顯示區）
+function buildDeepSeekBlock(lq, i) {
+  const wrap = document.createElement('div');
+  wrap.className = 'deepseek-block';
+
+  const title = document.createElement('p');
+  title.className = 'deepseek-title';
+  title.textContent = t('deepseek.title');
+  wrap.appendChild(title);
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'deepseek-input';
+  textarea.rows = 5;
+  textarea.placeholder = t('deepseek.answerPh');
+  wrap.appendChild(textarea);
+
+  const feedback = document.createElement('p');
+  feedback.className = 'feedback';
+  wrap.appendChild(feedback);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-primary';
+  btn.textContent = t('deepseek.checkBtn');
+  btn.onclick = function () {
+    correctLongAnswerWithDeepSeek(lq, textarea.value, feedback, btn);
+  };
+  wrap.appendChild(btn);
+
+  return wrap;
+}
+
+// 呼叫 DeepSeek API（OpenAI 相容介面）批改長題目作答
+async function correctLongAnswerWithDeepSeek(lq, userAnswer, feedbackEl, btn) {
+  const key = getDeepSeekKey();
+  if (!key) {
+    feedbackEl.className = 'feedback incorrect';
+    feedbackEl.textContent = t('deepseek.needKey');
+    return;
+  }
+  if (!userAnswer.trim()) {
+    feedbackEl.className = 'feedback incorrect';
+    feedbackEl.textContent = t('deepseek.needAnswer');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = t('deepseek.checking');
+  feedbackEl.className = 'feedback';
+  feedbackEl.textContent = t('deepseek.checking');
+
+  const isEn = getAppLanguage() === 'en';
+  const system = isEn
+    ? 'You are a strict and professional HKDSE Biology examiner. Grade the student\'s long-answer response against the model answer and the allocated marks. Provide: (1) a score out of the allocated marks; (2) point-by-point feedback on what was correct, missed or wrong; and (3) specific, constructive suggestions for improvement.'
+    : '你係一位嚴謹而專業的香港中學文憑試（HKDSE）生物科評卷員。請根據參考答案和題目分數，為學生的長題目作答評分。請提供：(1) 分數（以題目分數為滿分）；(2) 逐點評語，指出答對、遺漏或錯誤之處；(3) 具體而有建設性的改善建議。';
+
+  const prompt = isEn
+    ? 'Question:\n' + (lq.q || '') +
+      '\n\nMarks: ' + (lq.marks || '') +
+      '\n\nModel answer:\n' + (lq.answer || '') +
+      '\n\nStudent\'s answer:\n' + userAnswer +
+      '\n\nPlease grade the student\'s answer and give detailed feedback.'
+    : '題目：\n' + (lq.q || '') +
+      '\n\n分數：' + (lq.marks || '') +
+      '\n\n參考答案：\n' + (lq.answer || '') +
+      '\n\n學生的作答：\n' + userAnswer +
+      '\n\n請為學生的作答評分並給予詳細評語。';
+
+  try {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + key
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: prompt }
+        ],
+        stream: false,
+        temperature: 0.3,
+        max_tokens: 1200
+      })
+    });
+
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const errJson = await res.json();
+        detail = (errJson && errJson.error && errJson.error.message) ? errJson.error.message : '';
+      } catch (e) { /* 忽略解析錯誤 */ }
+      feedbackEl.className = 'feedback incorrect';
+      feedbackEl.textContent = t('deepseek.error') + (detail ? ' ' + detail : '');
+      return;
+    }
+
+    const data = await res.json();
+    const content = (data && data.choices && data.choices[0] && data.choices[0].message)
+      ? data.choices[0].message.content
+      : '';
+
+    if (!content) {
+      feedbackEl.className = 'feedback incorrect';
+      feedbackEl.textContent = t('deepseek.noResult');
+      return;
+    }
+
+    feedbackEl.className = 'feedback correct';
+    feedbackEl.textContent = content;
+  } catch (e) {
+    feedbackEl.className = 'feedback incorrect';
+    feedbackEl.textContent = t('deepseek.netError');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('deepseek.checkBtn');
+  }
+}
+
+// ---------- DSE 試卷（5 套；每套 = Paper 1 + Paper 2，中英雙語） ----------
+// 內容來自 dsePapers.js（DSE_PAPER_SETS）。每份試卷均含中英文（zh-HK / en-UK）字串，
+// 由 pickL() 按目前語言選用。
+// Paper 1（必修：第 1–25 章）：甲部 MC ＋ 乙部結構式，限時 150 分鐘；
+// Paper 2（選修：第 32–37 章）：全部結構式（無 MC），限時 60 分鐘。
+// 批改規則：
+//   - 選擇題（MC）：一律即時自動批改，無需 API Key。
+//   - 結構式題目：需 DeepSeek API Key 先可以由 AI 批改；未設 Key 時只可作答、唔會批改。
+let dseSet = null;            // 目前試卷套裝
+let dsePaper = null;          // 目前試卷（set.papers[x]）
+let dseSection = null;        // 目前分卷（section）
+let dseMcAnswers = [];        // 目前 MC 分卷嘅作答（索引陣列）
+let dseTimerSeconds = 0;      // 剩餘秒數
+let dseTimerInterval = null;  // 計時器
+
+function getDseSets() {
+  return (typeof DSE_PAPER_SETS !== 'undefined') ? DSE_PAPER_SETS : [];
+}
+
+// 中英選用：pickL({zh, en}) 按目前語言回傳；若是普通字串則原樣回傳
+function pickL(obj) {
+  if (!obj) return '';
+  if (typeof obj === 'string') return obj;
+  return getAppLanguage() === 'en' ? (obj.en || obj.zh || '') : (obj.zh || obj.en || '');
+}
+
+// 前往 DSE 試卷頁（顯示套裝列表）
+function goToDsePage() {
+  if (!requireAuth()) return;
+  stopChallenge();
+  stopDseTimer();
+  renderDseSetList();
+  showPage('dsePage');
+}
+
+// 渲染套裝列表（每套顯示 Paper 1 / Paper 2 兩個開始按鈕）
+function renderDseSetList() {
+  const listEl = document.getElementById('dsePaperList');
+  const bodyEl = document.getElementById('dsePaperBody');
+  if (!listEl) return;
+  stopDseTimer();
+  listEl.innerHTML = '';
+  if (bodyEl) bodyEl.classList.add('hidden');
+  listEl.classList.remove('hidden');
+
+  const sets = getDseSets();
+  if (!sets.length) {
+    const p = document.createElement('p');
+    p.className = 'notice';
+    p.textContent = t('dse.noPapers');
+    listEl.appendChild(p);
+    return;
+  }
+
+  sets.forEach(function (set, si) {
+    const row = document.createElement('div');
+    row.className = 'topic-row';
+
+    const no = document.createElement('span');
+    no.className = 'topic-no';
+    no.textContent = String(si + 1);
+
+    const name = document.createElement('span');
+    name.className = 'topic-name';
+    name.textContent = pickL(set.label);
+
+    const p1 = set.papers[0];
+    const p2 = set.papers[1];
+
+    const actions = document.createElement('span');
+    actions.className = 'dse-set-actions';
+
+    if (p1) {
+      const btn1 = document.createElement('button');
+      btn1.type = 'button';
+      btn1.className = 'btn btn-primary';
+      btn1.textContent = t('dse.paper1') + ' · ' + pickL(p1.subject) + ' · ' + pickL(p1.timeLabel);
+      btn1.onclick = function () { openDsePaper(set.id, 0); };
+      actions.appendChild(btn1);
+    }
+    if (p2) {
+      const btn2 = document.createElement('button');
+      btn2.type = 'button';
+      btn2.className = 'btn btn-neutral';
+      btn2.textContent = t('dse.paper2') + ' · ' + pickL(p2.subject) + ' · ' + pickL(p2.timeLabel);
+      btn2.onclick = function () { openDsePaper(set.id, 1); };
+      actions.appendChild(btn2);
+    }
+
+    row.appendChild(no);
+    row.appendChild(name);
+    row.appendChild(actions);
+    listEl.appendChild(row);
+  });
+}
+
+// 開啟試卷（paperIndex：0 = Paper 1，1 = Paper 2）並啟動計時器
+function openDsePaper(setId, paperIndex) {
+  const set = getDseSets().find(function (s) { return s.id === setId; });
+  if (!set) return;
+  const paper = set.papers[paperIndex];
+  if (!paper) return;
+  dseSet = set;
+  dsePaper = paper;
+  dseSection = paper.sections[0] || null;
+
+  const listEl = document.getElementById('dsePaperList');
+  const bodyEl = document.getElementById('dsePaperBody');
+  if (listEl) listEl.classList.add('hidden');
+  if (bodyEl) bodyEl.classList.remove('hidden');
+
+  startDseTimer(paper.timeMin);
+  renderDseSection();
+}
+
+// 切換分卷（Section）
+function setDseSection(sectionId) {
+  if (!dsePaper) return;
+  const sec = dsePaper.sections.find(function (s) { return s.id === sectionId; });
+  if (!sec) return;
+  dseSection = sec;
+  renderDseSection();
+}
+
+// ---------- DSE 計時器（Paper 1：150 分鐘；Paper 2：60 分鐘） ----------
+function startDseTimer(minutes) {
+  stopDseTimer();
+  dseTimerSeconds = Math.max(1, Math.round(minutes * 60));
+  updateDseTimer();
+  dseTimerInterval = setInterval(function () {
+    dseTimerSeconds--;
+    if (dseTimerSeconds <= 0) {
+      dseTimerSeconds = 0;
+      updateDseTimer();
+      stopDseTimer();
+      const noticeEl = document.getElementById('dsePaperNotice');
+      if (noticeEl) noticeEl.textContent = t('dse.timeUp');
+      window.alert(t('dse.timeUp'));
+    } else {
+      updateDseTimer();
+    }
+  }, 1000);
+}
+
+function stopDseTimer() {
+  if (dseTimerInterval !== null) {
+    clearInterval(dseTimerInterval);
+    dseTimerInterval = null;
+  }
+}
+
+function updateDseTimer() {
+  const textEl = document.getElementById('dseTimerText');
+  const barEl = document.getElementById('dseTimerBar');
+  const wrapEl = document.getElementById('dseTimerWrap');
+  if (wrapEl) wrapEl.classList.remove('hidden');
+  const total = dsePaper ? Math.max(1, dsePaper.timeMin * 60) : 1;
+  const mins = Math.floor(dseTimerSeconds / 60);
+  const secs = dseTimerSeconds % 60;
+  if (textEl) textEl.textContent = t('timer.left') + pad(mins) + ':' + pad(secs);
+  if (barEl) {
+    const ratio = total ? (dseTimerSeconds / total) : 0;
+    barEl.style.width = (ratio * 100) + '%';
+  }
+}
+
+// 渲染目前分卷：分卷切換 + 題目
+function renderDseSection() {
+  const container = document.getElementById('dseQuestionContainer');
+  const nav = document.getElementById('dseSectionNav');
+  const titleEl = document.getElementById('dseSectionTitle');
+  const noticeEl = document.getElementById('dsePaperNotice');
+  if (!container) return;
+  container.innerHTML = '';
+  if (noticeEl) noticeEl.textContent = (dsePaper && dsePaper.id === 'p2') ? t('dse.p2Rule') : '';
+
+  if (nav) {
+    nav.innerHTML = '';
+    dsePaper.sections.forEach(function (sec) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'practice-switch-btn' + (sec.id === dseSection.id ? ' active' : '');
+      btn.textContent = pickL(sec.name) + '（' + sec.totalMarks + '）';
+      btn.onclick = function () { setDseSection(sec.id); };
+      nav.appendChild(btn);
+    });
+  }
+  if (titleEl) {
+    const paperName = dsePaper.id === 'p2' ? t('dse.paper2') : t('dse.paper1');
+    titleEl.textContent = pickL(dseSet.label) + ' · ' + paperName + ' — ' + pickL(dseSection.name);
+  }
+
+  if (dseSection.type === 'mc') {
+    renderDseMc(container);
+  } else {
+    renderDseStructured(container);
+  }
+}
+
+// 渲染 MC 分卷（自動批改，無需 API Key）
+function renderDseMc(container) {
+  dseMcAnswers = new Array(dseSection.questions.length).fill(null);
+
+  const intro = document.createElement('p');
+  intro.className = 'meta';
+  intro.textContent = t('dse.mcHint');
+  container.appendChild(intro);
+
+  dseSection.questions.forEach(function (q, qi) {
+    const item = document.createElement('div');
+    item.className = 'dse-mc-item';
+
+    const qText = document.createElement('p');
+    qText.className = 'longq-q';
+    qText.textContent = 'Q' + q.no + '. ' + pickL(q.q);
+    item.appendChild(qText);
+
+    const opts = document.createElement('div');
+    opts.className = 'options';
+    (pickL(q.options) || []).forEach(function (opt, oi) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'option-btn';
+      btn.textContent = letter(oi) + '. ' + opt;
+      btn.onclick = function () {
+        opts.querySelectorAll('button').forEach(function (b) { b.classList.remove('selected'); });
+        btn.classList.add('selected');
+        dseMcAnswers[qi] = oi;
+      };
+      opts.appendChild(btn);
+    });
+    item.appendChild(opts);
+    container.appendChild(item);
+  });
+
+  const checkBtn = document.createElement('button');
+  checkBtn.type = 'button';
+  checkBtn.className = 'btn btn-primary';
+  checkBtn.textContent = t('dse.checkMc');
+  checkBtn.onclick = function () { checkDseMcAnswers(); };
+  container.appendChild(checkBtn);
+
+  const result = document.createElement('div');
+  result.id = 'dseMcResult';
+  result.className = 'analysis-card hidden';
+  container.appendChild(result);
+}
+
+// 核對 MC 答案（本地自動批改，無需 API Key）
+function checkDseMcAnswers() {
+  const result = document.getElementById('dseMcResult');
+  if (!result) return;
+  const total = dseSection.questions.length;
+  let correct = 0;
+  dseSection.questions.forEach(function (q, qi) {
+    if (dseMcAnswers[qi] === q.correct) correct++;
+  });
+  const pct = total ? Math.round((correct / total) * 100) : 0;
+
+  result.innerHTML = '';
+  const sum = document.createElement('p');
+  sum.className = 'score';
+  sum.textContent = t('score.rate') + correct + ' / ' + total + '（' + pct + '%）';
+  result.appendChild(sum);
+
+  dseSection.questions.forEach(function (q, qi) {
+    const row = document.createElement('div');
+    row.className = 'review-item';
+    const opts = pickL(q.options) || [];
+
+    const qEl = document.createElement('p');
+    qEl.className = 'review-q';
+    qEl.textContent = 'Q' + q.no + '. ' + pickL(q.q);
+    row.appendChild(qEl);
+
+    const correctLine = document.createElement('p');
+    correctLine.textContent = t('review.correct') + letter(q.correct) + '. ' + opts[q.correct];
+    row.appendChild(correctLine);
+
+    const userLine = document.createElement('p');
+    if (dseMcAnswers[qi] === null) {
+      userLine.textContent = t('review.your') + t('review.unanswered');
+    } else {
+      const right = dseMcAnswers[qi] === q.correct;
+      userLine.textContent = t('review.your') + letter(dseMcAnswers[qi]) + '. ' +
+        opts[dseMcAnswers[qi]] + (right ? t('review.markCorrect') : t('review.markWrong'));
+    }
+    row.appendChild(userLine);
+
+    result.appendChild(row);
+  });
+  result.classList.remove('hidden');
+}
+
+// 渲染結構式題目分卷（作答＋按「提交批改」由 DeepSeek 批改）
+function renderDseStructured(container) {
+  const hasKey = !!getDeepSeekKey();
+
+  const intro = document.createElement('p');
+  intro.className = 'meta';
+  intro.textContent = hasKey ? t('dse.aiActive') : t('dse.aiNeedsKey');
+  container.appendChild(intro);
+
+  dseSection.questions.forEach(function (q) {
+    const block = document.createElement('div');
+    block.className = 'longq-section';
+
+    const qText = document.createElement('p');
+    qText.className = 'longq-q';
+    qText.textContent = 'Q' + q.no + '. ' + pickL(q.q);
+    block.appendChild(qText);
+
+    if (q.marks) {
+      const marks = document.createElement('p');
+      marks.className = 'longq-marks';
+      marks.textContent = (q.type ? (t('dse.' + q.type) + ' · ') : '') + pickL(q.marks);
+      block.appendChild(marks);
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'deepseek-input';
+    textarea.rows = 6;
+    textarea.placeholder = t('dse.answerPh');
+    block.appendChild(textarea);
+
+    const feedback = document.createElement('p');
+    feedback.className = 'feedback';
+    block.appendChild(feedback);
+
+    const gradeBtn = document.createElement('button');
+    gradeBtn.type = 'button';
+    gradeBtn.className = 'btn btn-primary';
+    gradeBtn.textContent = t('deepseek.checkBtn');
+    gradeBtn.onclick = function () {
+      // 重用長題目嘅 DeepSeek 批改函式（傳入單語言化題目：q / marks / answer）
+      const lq = {
+        q: pickL(q.q),
+        marks: pickL(q.marks),
+        answer: pickL(q.answer)
+      };
+      correctLongAnswerWithDeepSeek(lq, textarea.value, feedback, gradeBtn);
+    };
+    block.appendChild(gradeBtn);
+
+    container.appendChild(block);
+  });
 }
 
 // ---------- 學習前沿科技 ----------
@@ -2396,6 +3191,8 @@ var I18N = {
     'countdown.daysOne': '天',
     'card.mc': '多項選擇題',
     'card.tech': '學習前沿科技',
+    'card.faq': '常見問題 FAQ',
+    'card.bug': 'Bug 回報',
     'card.wrong': '錯題重溫',
     'card.notes': '筆記',
     'card.ranking': '排行榜',
@@ -2421,6 +3218,30 @@ var I18N = {
     'btn.rework': '重溫作答',
     'btn.clearAll': '清空全部',
     'page.tech': '學習前沿科技',
+    'page.faq': '常見問題 FAQ',
+    'faq.subtitle': '點擊問題以展開答案',
+    'faq.noContent': 'FAQ 內容尚未載入（faq.js 缺失）。',
+    'page.bug': 'Bug 回報',
+    'bug.subtitle': '發現問題？提交 Bug 回報，我們會跟進處理。',
+    'bug.newReport': '提交 Bug 回報',
+    'bug.title': '標題 *',
+    'bug.categoryLabel': '類別',
+    'bug.description': '詳細描述 *',
+    'bug.steps': '重現步驟',
+    'bug.submit': '提交',
+    'bug.fillRequired': '請填寫標題與詳細描述。',
+    'bug.submitted': '✓ 回報已提交，多謝你的回饋！',
+    'bug.submitFailed': '提交失敗，請稍後再試。',
+    'bug.myReports': '我的回報',
+    'bug.loading': '載入中…',
+    'bug.loadFailed': '載入失敗，請稍後再試。',
+    'bug.noReports': '暫時沒有 Bug 回報。',
+    'bug.untitled': '（無標題）',
+    'bug.stepsLabel': '重現步驟：',
+    'bug.category.app': '應用程式',
+    'bug.category.content': '內容／題目',
+    'bug.category.dse': 'DSE 試卷',
+    'bug.category.other': '其他',
     'page.ranking': '排行榜',
     'page.notes': '筆記',
     'notes.subtitle': '按課題瀏覽點列式筆記，每課附兩條長題目（含參考答案）',
@@ -2496,6 +3317,46 @@ var I18N = {
     'longq.count': '（{n} 題）',
     'longq.showAnswer': '顯示參考答案',
     'longq.hideAnswer': '隱藏參考答案',
+
+    // 長題目 AI 批改（DeepSeek）
+    'deepseek.settingsTitle': 'DeepSeek AI（長題目批改）',
+    'deepseek.settingsDesc': '輸入你的 DeepSeek API Key 以啟用長題目 AI 批改功能（只儲存於本機瀏覽器）',
+    'deepseek.keyPh': 'sk-...（在 platform.deepseek.com 申請）',
+    'deepseek.saveKey': '儲存 Key',
+    'deepseek.hint': 'Key 只儲存於本機瀏覽器，不會上傳到任何伺服器。',
+    'deepseek.saved': 'DeepSeek API Key 已儲存！',
+    'deepseek.saveErr': '儲存失敗，請再試。',
+    'deepseek.statusSet': '✅ 已設定 DeepSeek API Key',
+    'deepseek.statusEmpty': '尚未設定 API Key',
+    'deepseek.title': '✍️ AI 批改（DeepSeek）：輸入你的作答，交由 AI 批改評分',
+    'deepseek.answerPh': '在此輸入你的長題目作答…',
+    'deepseek.checkBtn': '提交批改',
+    'deepseek.checking': 'AI 批改中，請稍候…',
+    'deepseek.needKey': '尚未設定 DeepSeek API Key，請先到「設定」頁填入。',
+    'deepseek.needAnswer': '請先輸入你的作答。',
+    'deepseek.error': 'AI 批改失敗（API 回傳錯誤）：',
+    'deepseek.noResult': 'AI 沒有回傳結果，請再試。',
+    'deepseek.netError': '連線失敗，請檢查網絡後再試。',
+
+    // DSE 試卷
+    'page.dse': 'DSE 試卷',
+    'card.dse': 'DSE 試卷',
+    'dse.subtitle': '自製 5 套中英雙語模擬試卷：卷一（120 分）＋卷二（40 分），合共 160 分',
+    'dse.noPapers': 'DSE 試卷內容尚未載入（dsePapers.js 缺失）。',
+    'dse.paper1': 'Paper 1',
+    'dse.paper2': 'Paper 2',
+    'dse.short': '短答題',
+    'dse.long': '長題目',
+    'dse.verylong': '超長題目',
+    'dse.essay': '論文',
+    'dse.p2Rule': '卷二共四部分，每部分佔 20 分（各含兩條長題目）。考生可作答全部四部分，但只計算得分最高的兩部分，滿分為 40 分。',
+    'dse.timeUp': '時間到！請停止作答並核對答案。',
+    'dse.mcHint': '選擇答案後按「核對答案」即可自動批改（無需 API Key）。',
+    'dse.checkMc': '核對答案',
+    'dse.aiActive': '已設定 DeepSeek API Key：可批改全部作答（選擇題＋結構式題目）。',
+    'dse.aiNeedsKey': '未設定 DeepSeek API Key：只能批改選擇題；結構式題目請先到「設定」填入 API Key 後即可由 AI 批改。',
+    'dse.answerPh': '在此輸入你的作答…',
+    'dse.backPapers': '← 返回試卷列表',
 
     // 排行榜
     'ranking.empty': '暫時未有排行榜資料。',
@@ -2614,6 +3475,8 @@ var I18N = {
     'countdown.daysOne': 'day',
     'card.mc': 'Multiple Choice',
     'card.tech': 'Frontier Technology',
+    'card.faq': 'FAQ',
+    'card.bug': 'Bug Report',
     'card.wrong': 'Wrong Questions',
     'card.notes': 'Notes',
     'card.ranking': 'Leaderboard',
@@ -2639,6 +3502,30 @@ var I18N = {
     'btn.rework': 'Revise Answers',
     'btn.clearAll': 'Clear All',
     'page.tech': 'Frontier Technology',
+    'page.faq': 'FAQ',
+    'faq.subtitle': 'Click a question to expand its answer',
+    'faq.noContent': 'FAQ content not loaded (faq.js missing).',
+    'page.bug': 'Bug Report',
+    'bug.subtitle': 'Found a problem? Submit a bug report and we will follow it up.',
+    'bug.newReport': 'Submit a Bug Report',
+    'bug.title': 'Title *',
+    'bug.categoryLabel': 'Category',
+    'bug.description': 'Detailed description *',
+    'bug.steps': 'Steps to reproduce',
+    'bug.submit': 'Submit',
+    'bug.fillRequired': 'Please fill in the title and the detailed description.',
+    'bug.submitted': '✓ Report submitted. Thank you for your feedback!',
+    'bug.submitFailed': 'Submission failed. Please try again later.',
+    'bug.myReports': 'My Reports',
+    'bug.loading': 'Loading…',
+    'bug.loadFailed': 'Failed to load. Please try again later.',
+    'bug.noReports': 'No bug reports yet.',
+    'bug.untitled': '(No title)',
+    'bug.stepsLabel': 'Steps to reproduce:',
+    'bug.category.app': 'App',
+    'bug.category.content': 'Content / Questions',
+    'bug.category.dse': 'DSE papers',
+    'bug.category.other': 'Other',
     'page.ranking': 'Leaderboard',
     'page.notes': 'Notes',
     'notes.subtitle': 'Browse bullet-point notes by topic, each with two long questions (with answers)',
@@ -2714,6 +3601,46 @@ var I18N = {
     'longq.count': '({n} questions)',
     'longq.showAnswer': 'Show model answer',
     'longq.hideAnswer': 'Hide model answer',
+
+    // Long-question AI grading (DeepSeek)
+    'deepseek.settingsTitle': 'DeepSeek AI (Long-question grading)',
+    'deepseek.settingsDesc': 'Enter your DeepSeek API Key to enable AI grading of long questions (stored only in your browser)',
+    'deepseek.keyPh': 'sk-... (get one at platform.deepseek.com)',
+    'deepseek.saveKey': 'Save Key',
+    'deepseek.hint': 'The key is stored only in your browser and is never uploaded to any server.',
+    'deepseek.saved': 'DeepSeek API Key saved!',
+    'deepseek.saveErr': 'Failed to save. Please try again.',
+    'deepseek.statusSet': '✅ DeepSeek API Key set',
+    'deepseek.statusEmpty': 'API key not set',
+    'deepseek.title': '✍️ AI grading (DeepSeek): write your answer and submit for grading',
+    'deepseek.answerPh': 'Type your long-question answer here…',
+    'deepseek.checkBtn': 'Submit for grading',
+    'deepseek.checking': 'AI is grading, please wait…',
+    'deepseek.needKey': 'DeepSeek API key not set. Please add it in Settings first.',
+    'deepseek.needAnswer': 'Please write your answer first.',
+    'deepseek.error': 'AI grading failed (API error): ',
+    'deepseek.noResult': 'The AI returned no result. Please try again.',
+    'deepseek.netError': 'Connection failed. Please check your network and try again.',
+
+    // DSE papers
+    'page.dse': 'DSE Papers',
+    'card.dse': 'DSE Papers',
+    'dse.subtitle': '5 bilingual mock paper sets: Paper 1 (120 marks) + Paper 2 (40 marks), total 160 marks',
+    'dse.noPapers': 'DSE paper content not loaded (dsePapers.js missing).',
+    'dse.paper1': 'Paper 1',
+    'dse.paper2': 'Paper 2',
+    'dse.short': 'Short answer',
+    'dse.long': 'Long question',
+    'dse.verylong': 'Very long question',
+    'dse.essay': 'Essay',
+    'dse.p2Rule': 'Paper 2 has four parts, each worth 20 marks (two long questions in each). Candidates may answer all four parts, but only the two highest-scoring parts are counted. Total: 40 marks.',
+    'dse.timeUp': 'Time is up! Stop writing and check your answers.',
+    'dse.mcHint': 'Select your answers, then press "Check answers" to auto-grade (no API key needed).',
+    'dse.checkMc': 'Check answers',
+    'dse.aiActive': 'DeepSeek API key set: all answers can be graded (MC + structured questions).',
+    'dse.aiNeedsKey': 'DeepSeek API key not set: only multiple-choice questions can be graded. Add your API key in Settings to enable AI grading of the structured questions.',
+    'dse.answerPh': 'Type your answer here…',
+    'dse.backPapers': '← Back to papers',
 
     // Ranking
     'ranking.empty': 'No leaderboard data yet.',
@@ -2857,6 +3784,14 @@ function renderSettingsPage() {
   var noticeEl = document.getElementById('settingsNameNotice');
   if (noticeEl) showAuthNotice(noticeEl, '', '');
   resetDeleteAccountPanel();
+
+  // DeepSeek AI key 顯示（只儲存於本機瀏覽器）
+  var deepSeekInput = document.getElementById('settingsDeepSeekKeyInput');
+  var deepSeekStatus = document.getElementById('settingsDeepSeekStatus');
+  var deepSeekNotice = document.getElementById('settingsDeepSeekNotice');
+  if (deepSeekInput) deepSeekInput.value = getDeepSeekKey();
+  if (deepSeekStatus) deepSeekStatus.textContent = getDeepSeekKey() ? t('deepseek.statusSet') : t('deepseek.statusEmpty');
+  if (deepSeekNotice) showAuthNotice(deepSeekNotice, '', '');
 }
 
 // 儲存用戶名稱：更新 profiles 表 + auth 元數據

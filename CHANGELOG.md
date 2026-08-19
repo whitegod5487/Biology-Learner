@@ -8,6 +8,125 @@
 
 ---
 
+## v0.9.9（2026-08-19）
+**更新主題**：新增「Bug 回報」頁面（回報存入資料庫，狀態可在資料庫設定）
+
+- **Bug 回報頁面**：首頁加入「🐞 Bug 回報」卡片；可提交標題、類別（應用程式／內容題目／DSE 試卷／其他）、詳細描述、重現步驟；回報會存入資料庫 `bug_reports` 表。
+- **狀態顯示**：每條回報顯示狀態徽章，狀態定義存於 `bug_report_statuses` 表（**可在資料庫設定／管理**，前端自動讀取），預設包含：**New（新回報）／Assigned（已分派）／Fixed（已修復）／Pending（待處理）／Close（已關閉）／Reopen（重新開啟）／Rejected（已拒絕）**，每種狀態可設定中英文標籤、顏色與排序。
+- **Supabase schema**：`schema.sql` 新增 `bug_report_statuses`、`bug_reports` 兩表、預設狀態種子與 RLS 政策（狀態表開放讀取；回報表用戶可提交及讀取自己嘅回報）。
+- **i18n**：新增 `page.bug`、`card.bug`、`bug.*` 中英字串。
+- 版本更新至 **v0.9.9**，全部 `<script>` 快取參數更新為 `?v=0.9.9`。**請在 Supabase 執行更新後嘅 `schema.sql`。**
+
+## v0.9.8（2026-08-19）
+**更新主題**：FAQ 問答內容抽離至獨立資料檔
+
+- 新增 [`faq.js`](faq.js)：FAQ 問答內容（6 條，中英雙語 `{ zh, en }`，含 DeepSeek 官網連結）抽離為獨立資料檔，仿照長題目資料檔（如 `longQuestions1.js`）的做法。
+- [`app.js`](app.js) 改動：
+  - 移除內置的 `FAQ_ITEMS` 定義與 FAQ 問答 i18n 字串（`faq.q1–q6`、`faq.a1–a6`、`faq.deepseekLink`）。
+  - `renderFaqPage()`／`buildFaqItem()` 改為讀取 `faq.js` 的 `FAQ_ITEMS`，並用 `pickL()` 依語言顯示問題、答案與連結標籤。
+  - 保留頁面標題／副標等 UI 字串（`page.faq`、`card.faq`、`faq.subtitle`），並新增 `faq.noContent` 作缺失提示。
+- [`index.html`](index.html)：加入 `<script src="faq.js?v=0.9.8"></script>`。
+- 版本更新至 **v0.9.8**，全部 `<script>` 快取參數更新為 `?v=0.9.8`。
+
+## v0.9.7（2026-08-19）
+**更新主題**：FAQ 新增「誰製作這個應用程式？」
+
+- FAQ 新增第 6 條：「這個應用程式是誰製作的？」／「Who made this app?」
+  - 答案：由香港一位中學生，在 AI 的協助下製作；屬自學生物科的個人項目，並非商業產品；歡迎回饋意見。
+- 新增中英字串 `faq.q6`、`faq.a6`。
+- 版本更新至 **v0.9.7**，全部 `<script>` 快取參數更新為 `?v=0.9.7`。
+
+## v0.9.6（2026-08-19）
+**更新主題**：FAQ「如何獲得分數」加入具體分數說明
+
+- FAQ 第 3 條答案加入實際加分數字：
+  - 每日登入：**+10 分**（每日一次）。
+  - 挑戰模式：每日第一次測試，每答對一題 **+1 分**（上限 36 分），全對再額外 **+4 分**。
+  - 任務線：完成課題練習並全對（20/20）：**+25 分**（每個課題只限一次）。
+- 同時註明：練習模式、錯題重溫、DSE 試卷與長題目本身不會直接加分。
+- 版本更新至 **v0.9.6**，全部 `<script>` 快取參數更新為 `?v=0.9.6`。
+
+## v0.9.5（2026-08-19）
+**更新主題**：FAQ 文字修訂
+
+- FAQ「如何使用 DeepSeek API Key」答案中的收費提示刪去「可能」二字（改為「DeepSeek 對 API 使用收費」）；英文同步由 "may charge" 改為 "charges"。
+- 版本更新至 **v0.9.5**，全部 `<script>` 快取參數更新為 `?v=0.9.5`。
+
+## v0.9.4（2026-08-19）
+**更新主題**：FAQ「如何使用 DeepSeek API Key」加入官方網站連結
+
+- FAQ 第 2 條（如何使用 DeepSeek API Key）的答案下方新增「🔗 前往 DeepSeek 官方網站」按鈕，於新分頁開啟 `https://platform.deepseek.com/`（`target="_blank"`、`rel="noopener"`）。
+- 新增中英字串 `faq.deepseekLink`。
+- 版本更新至 **v0.9.4**，全部 `<script>` 快取參數更新為 `?v=0.9.4`。
+
+## v0.9.3（2026-08-19）
+**更新主題**：新增「常見問題 FAQ」頁面
+
+- **新增 FAQ 頁面**：首頁加入「❓ 常見問題 FAQ」卡片；進入後顯示 5 條可摺疊的常見問題（點擊問題展開／收起答案），重用既有 `tech-list` 樣式。
+- **FAQ 內容（中英雙語 zh-HK / en-UK）**：
+  1. 資料庫的數據儲存風險（資料儲存於 Supabase 雲端、HTTPS 加密、API Key 只存於瀏覽器 localStorage 等）。
+  2. 如何使用 DeepSeek API Key（註冊、在設定貼上、儲存後 AI 批改長題目與 DSE 結構式題目）。
+  3. 如何獲得分數（練習、挑戰、每日登入、DSE 試卷等）。
+  4. 如何儲存 AI API Key（設定頁儲存至本機 localStorage，可刪除）。
+  5. 分數（積分）是否有用——**分數並無實際用途**，僅供排行榜比較與遊戲化獎勵。
+- **i18n**：新增 `page.faq`、`card.faq`、`faq.subtitle`、`faq.q1–q5`、`faq.a1–a5` 中英字串。
+- **版本更新至 v0.9.3**，全部 `<script>` 快取參數更新為 `?v=0.9.3`。
+
+## v0.9.2（2026-08-19）
+**更新主題**：DSE 試卷跟隨 HKDSE 生物科真實試卷格式重組——卷一 120 分、卷二 40 分（合共 160 分）
+
+- **卷一（Paper 1 · 必修 第 1–25 章 · 120 分）**重組：
+  - 甲部：**36 條選擇題**（每條 1 分，共 **36 分**）。
+  - 乙部：結構式題目，共 **84 分**，包含 4 類題型（每題顯示題型標籤）：
+    - **1 條短答題**（4 分）＋ **10 條長題目**（每條 6 分）＋ **1 條超長題目**（10 分）＋ **1 條論文**（10 分）。
+- **卷二（Paper 2 · 選修 第 32–37 章 · 40 分）**重組：
+  - 共 **四部分**（人體生理學、應用生態學、微生物與人類、生物科技），**每部分 20 分**，每部分各有 **2 條長題目**（每條 10 分）。
+  - 頁面顯示規則提示：考生可作答全部四部分，但**只計算得分最高的兩部分**，滿分 40 分。
+- **UI／i18n**：分卷導航顯示各分卷總分；結構式題目標示題型（短答題／長題目／超長題目／論文）；試卷列表按鈕顯示總分；新增 `dse.short`、`dse.long`、`dse.verylong`、`dse.essay`、`dse.marks`、`dse.p2Rule` 中英字串。
+- 版本更新至 **v0.9.2**，全部 `<script>` 快取參數更新為 `?v=0.9.2`。
+
+## v0.9.1（2026-08-19）
+**更新主題**：DSE 試卷功能全面升級——5 套自製中英雙語模擬試卷＋每份試卷限時計時器
+
+- **改為自製試卷（非 DSE 原卷）**：[`dsePapers.js`](dsePapers.js) 重寫為 **5 套**中英雙語（zh-HK / en-UK）模擬試卷，每套由 **Paper 1 + Paper 2** 組成一份完整試卷套裝。
+  - **Paper 1（必修：第 1–25 章）**：甲部選擇題（MC）＋乙部結構式題目。
+  - **Paper 2（選修：第 32–37 章）**：人體生理學、應用生態學、微生物與人類、生物科技四個分卷，全部結構式（**無選擇題**）。
+  - 全部題目、選項、分數與參考答案均以 `{ zh, en }` 雙語提供，由 `pickL()` 按目前語言自動選用（中文（香港）或 English (UK)）。
+- **每份試卷加入限時計時器**：
+  - Paper 1：**2 小時 30 分鐘（150 分鐘）**；Paper 2：**1 小時（60 分鐘）**。
+  - 開啟試卷即啟動倒數（進度條＋剩餘時間），時間到會自動提示「時間到」。
+  - 返回試卷列表／返回主頁時自動停止計時器。
+- **批改規則（沿用 DeepSeek API Key）**：選擇題一律即時本地自動批改（無需 Key）；結構式題目需 DeepSeek Key 先可以由 AI 批改。
+- [`app.js`](app.js) DSE 邏輯改為「套裝列表 → 選擇 Paper 1 / Paper 2 → 分卷切換 → 作答」，新增 `getDseSets()`、`pickL()`、`startDseTimer()`／`stopDseTimer()`／`updateDseTimer()`；[`index.html`](index.html) 新增 `.dse-set-actions` 樣式與計時器 UI（`#dseTimerWrap`）；新增中英 i18n 字串（`dse.paper1`、`dse.paper2`、`dse.timeUp`）。
+- 版本更新為 `v0.9.1`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.9.1` cache-busting 參數。
+
+## v0.9.0（2026-08-19）
+**更新主題**：新增「DSE 試卷」功能（Paper 1 與 Paper 2，MC 自動批改＋DeepSeek AI 批改全部作答）
+
+- **新增「DSE 試卷」頁面**：主頁與「多項選擇題」頁新增「🗞️ DSE 試卷」入口，按 HKDSE 生物科真實試卷形式練習（[`dsePapers.js`](dsePapers.js) 載入內容）。
+- **兩份試卷**：
+  - **Sample Paper 1（必修：課本 1A–2C）**：Section A 為 36 條選擇題（36 分），Section B 為 12 條結構式題目（84 分）。
+  - **Sample Paper 2（選修：課本 5 & 6）**：A 人體生理學、B 應用生態學、C 微生物與人類、D 生物科技四個分卷，每卷 20 分，全部為結構式題目（**沒有選擇題**）。
+- **批改規則**（配合 v0.8.0 的 DeepSeek API Key）：
+  - **未輸入 DeepSeek API Key**：只可批改**選擇題（MC）**——答完按「核對答案」即時本地自動批改（無需 API Key）；結構式題目只可作答、不會批改，並提示先到「設定」填入 Key。
+  - **已輸入 DeepSeek API Key**：可批改**全部作答**——選擇題仍即時自動批改，結構式題目按「提交批改」交由 DeepSeek（`deepseek-chat`）按題目＋分數＋參考答案批改評分。
+- 新增中英 i18n 字串（`dse.*`、`card.dse`、`page.dse`）。
+- [`app.js`](app.js) 新增 `goToDsePage()`、`renderDsePaperList()`、`openDsePaper()`、`setDseSection()`、`renderDseSection()`、`renderDseMc()`、`checkDseMcAnswers()`、`renderDseStructured()`（結構式題目重用長題目嘅 DeepSeek 批改函式）；`dsePage` 加入 `PAGE_IDS`。
+- [`index.html`](index.html) 新增 `dsePage` 區段（試卷列表＋分卷切換＋題目容器）及 `.dse-mc-item` 樣式，並載入 `dsePapers.js`。
+- 注意：官方評分表 PDF 為圖像掃描（無法抽取文字），故試卷答案為模型按題目整理嘅最佳估計；如需更準，可於 [`dsePapers.js`](dsePapers.js) 自行修正 `correct`／`answer`。
+- 版本更新為 `v0.9.0`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.9.0` cache-busting 參數。
+
+## v0.8.0（2026-08-19）
+**更新主題**：新增 DeepSeek AI 長題目批改功能（於設定頁填入 API Key）
+
+- **設定頁新增「DeepSeek AI（長題目批改）」區塊**：可輸入並儲存 DeepSeek API Key（只儲存於本機瀏覽器 localStorage `bioAppDeepSeekKey`，不會上傳到任何伺服器），並顯示儲存狀態。
+- **長題目頁新增 AI 批改功能**：每題長題目下方新增「✍️ AI 批改（DeepSeek）」區塊——輸入你的作答後按「提交批改」，程式會把「題目＋分數＋參考答案＋你的作答」交由 DeepSeek（`deepseek-chat`，OpenAI 相容介面 `https://api.deepseek.com/chat/completions`）批改，回傳分數、逐點評語與改善建議，並直接顯示於該題下方。
+- 未設定 API Key 或未輸入作答時會顯示對應提示；連線／API 錯誤亦會顯示友善錯誤訊息。
+- 新增中英 i18n 字串（`deepseek.*`）；設定頁填入的 Key 會以密碼型輸入框顯示。
+- [`app.js`](app.js) 新增 `getDeepSeekKey()`、`saveDeepSeekKey()`、`buildDeepSeekBlock()`、`correctLongAnswerWithDeepSeek()`，並於 `buildLongQBlock()` 每題下方追加批改區塊；`renderSettingsPage()` 載入已儲存 Key 與狀態。
+- [`index.html`](index.html) 設定頁新增 DeepSeek 區塊及 `.deepseek-*` 樣式。
+- 版本更新為 `v0.8.0`（`APP_VERSION`），並同步更新 [`index.html`](index.html) 的 `?v=0.8.0` cache-busting 參數。
+
 ## v0.7.2（2026-08-19）
 **更新主題**：程式底部新增「2027 生物科 DSE 倒數」文字
 

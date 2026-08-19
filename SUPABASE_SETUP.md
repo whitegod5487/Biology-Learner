@@ -126,6 +126,27 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOi...';            // 你嘅 anon/public key
 
 ---
 
+## Bug 回報（BUG REPORT）
+
+程式加入「🐞 Bug 回報」頁面（v0.9.9 起），讓用戶提交 Bug 回報並查看狀態：
+
+- **回報儲存**：回報會存入 `public.bug_reports` 表（`user_id`、`username`、`title`、`category`、`description`、`steps`、`status_code`、`created_at`）。用戶只可以提交自己嘅回報（RLS 保證 `user_id = auth.uid()`），亦只可以讀取自己嘅回報。
+- **狀態可喺資料庫設定**：狀態定義存於 `public.bug_report_statuses` 表（`code`、`label_zh`、`label_en`、`color`、`sort_order`、`is_active`）。**狀態並非寫死喺程式碼**——前端會讀取呢張表嚟顯示狀態徽章（標籤＋顏色），開發者／管理員可直接喺 Supabase Dashboard（Table Editor）或 SQL 增刪改狀態、修改標籤、顏色或排序，前端會自動反映。
+- **預設狀態**（`schema.sql` 種子資料）：
+  - `new`（新回報，紅色）
+  - `assigned`（已分派，橙色）
+  - `fixed`（已修復，綠色）
+  - `pending`（待處理，藍色）
+  - `close`（已關閉，灰色）
+  - `reopen`（重新開啟，紫色）
+  - `rejected`（已拒絕，深紅）
+- **狀態變更**：由管理員喺資料庫直接更新 `bug_reports.status_code`（前端只讀取顯示）；用戶喺「Bug 回報」頁面可提交新回報及查看自己回報嘅狀態。
+- **RLS**：`bug_report_statuses` 開放所有人讀取（非敏感資料）；`bug_reports` 只限本人讀取／提交。
+
+> 升級現有專案：直接重新執行新版 `schema.sql` 即可（idempotent），會安全建立兩張新表、種子狀態與政策，唔會影響現有資料。
+
+---
+
 ## 補充說明
 
 ### 筆記語言
