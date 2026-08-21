@@ -42,7 +42,7 @@ const LQ_BY_BOOK = IS_EN_BANK
 
 // ---------- 版本（更新時記得同步 CHANGELOG.md） ----------
 // 每次更新後：1) 修改下方 APP_VERSION；2) 在 CHANGELOG.md 加入對應的版本記錄（見檔案末尾提醒）。
-const APP_VERSION = 'v0.9.9';
+const APP_VERSION = 'v1.0.0';
 
 function updateVersionLabel() {
   const el = document.getElementById('appVersionLabel');
@@ -623,7 +623,7 @@ function startPractice(topicNo) {
 
   practiceTopicNo = topicNo;
   practiceBookId = null;
-  practiceQuestions = qs.slice(0, 20);
+  practiceQuestions = qs; // 整章練習，100 題全數可用（v1.0.0 起每章 100 題）
   practiceIndex = 0;
   practiceCorrectCount = 0;
   wrongQuizActive = false;
@@ -2896,7 +2896,7 @@ async function renderRanking() {
 }
 
 // ---------- 任務線（Quest Line） ----------
-// 每課題完成「課題練習」並全部答對（20/20）→ 名稱旁加 ✓，並獲得 +25 分；
+// 每課題完成「課題練習」並全部答對（100/100）→ 名稱旁加 ✓，並獲得 +25 分；
 // 每帳戶每課題只可獲得一次（由 Supabase 嘅 quest_completions 表 unique 約束保證）。
 // 完成記錄載入後放入記憶體快取（questCache），與錯題快取做法一致。
 let questCache = [];          // 已完成課題編號陣列：[topicNo, ...]
@@ -3184,7 +3184,7 @@ var I18N = {
     'score.event.quest': '任務線',
     'score.rule.dailyLogin': '每日登入：+10 分（每日一次）',
     'score.rule.challenge': '挑戰模式：每日第一次測試，每答對一題 +1（上限 36），全對額外 +4',
-    'score.rule.quest': '任務線：按課題完成練習並全對（20/20）：+25 分（每課題一次）',
+    'score.rule.quest': '任務線：按課題完成練習並全對（100/100）：+25 分（每課題一次）',
     'score.rule.streak': '連續登入：每日登入日數會顯示喺主頁「主頁」旁',
     'countdown.label': '距離 2027 年生物科 DSE 還有',
     'countdown.days': '天',
@@ -3201,7 +3201,7 @@ var I18N = {
     'card.challenge': '挑戰模式',
     'btn.backHome': '返回主頁',
     'page.practice': '練習模式',
-    'practice.subtitle': '按課題（每課題 20 題）或按課本（整冊）練習',
+    'practice.subtitle': '按課題（每課題 100 題）或按課本（整冊）練習',
     'practice.switchTopic': '按課題',
     'practice.switchBook': '按課本',
     'btn.backMC': '返回多項選擇題',
@@ -3468,7 +3468,7 @@ var I18N = {
     'score.event.quest': 'Quest line',
     'score.rule.dailyLogin': 'Daily login: +10 points (once per day)',
     'score.rule.challenge': 'Challenge mode: first attempt each day, +1 per correct answer (max 36), +4 bonus for full marks',
-    'score.rule.quest': 'Quest line: complete a topic practice with all correct (20/20): +25 points (once per topic)',
+    'score.rule.quest': 'Quest line: complete a topic practice with all correct (100/100): +25 points (once per topic)',
     'score.rule.streak': 'Login streak: your consecutive login days are shown next to the home page title',
     'countdown.label': '2027 Biology DSE is in',
     'countdown.days': 'days',
@@ -3485,7 +3485,7 @@ var I18N = {
     'card.challenge': 'Challenge Mode',
     'btn.backHome': 'Back to Home',
     'page.practice': 'Practice Mode',
-    'practice.subtitle': 'Practise by topic (20 questions each) or by book (whole book)',
+    'practice.subtitle': 'Practise by topic (100 questions each) or by book (whole book)',
     'practice.switchTopic': 'By Topic',
     'practice.switchBook': 'By Book',
     'btn.backMC': 'Back to MC',

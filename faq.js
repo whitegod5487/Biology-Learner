@@ -15,7 +15,7 @@ const FAQ_ITEMS = [
   },
   {
     q: { zh: '如何獲得分數？', en: 'How do I gain marks?' },
-    a: { zh: '你可以透過以下方式獲得分數：\n- 每日登入：+10 分（每日一次）。\n- 挑戰模式：每日第一次測試，每答對一題 +1 分（上限 36 分），全對再額外 +4 分。\n- 任務線：完成課題練習並全對（20/20）：+25 分（每個課題只限一次）。\n分數會記錄在你的帳戶中，並用於排行榜排名。\n注意：練習模式、錯題重溫、DSE 試卷與長題目本身不會直接加分。', en: 'You can gain marks in the following ways:\n- Daily login: +10 points (once per day).\n- Challenge mode: first attempt each day, +1 point per correct answer (max 36 points), +4 extra bonus if you get full marks.\n- Quest line: complete a topic practice with all correct (20/20): +25 points (once per topic).\nYour points are recorded in your account and used for the ranking list.\nNote: practice mode, wrong-question review, DSE papers and long questions do not add points by themselves.' }
+    a: { zh: '你可以透過以下方式獲得分數：\n- 每日登入：+10 分（每日一次）。\n- 挑戰模式：每日第一次測試，每答對一題 +1 分（上限 36 分），全對再額外 +4 分。\n- 任務線：完成課題練習並全對（100/100）：+25 分（每個課題只限一次）。\n分數會記錄在你的帳戶中，並用於排行榜排名。\n注意：練習模式、錯題重溫、DSE 試卷與長題目本身不會直接加分。', en: 'You can gain marks in the following ways:\n- Daily login: +10 points (once per day).\n- Challenge mode: first attempt each day, +1 point per correct answer (max 36 points), +4 extra bonus if you get full marks.\n- Quest line: complete a topic practice with all correct (100/100): +25 points (once per topic).\nYour points are recorded in your account and used for the ranking list.\nNote: practice mode, wrong-question review, DSE papers and long questions do not add points by themselves.' }
   },
   {
     q: { zh: '如何儲存 AI API Key？', en: 'How do I save the AI API key?' },

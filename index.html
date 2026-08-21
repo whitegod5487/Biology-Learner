@@ -1364,9 +1364,6 @@
         <div class="big-card" onclick="goToChallengeMode()">
           <span class="icon">⏱️</span><span data-i18n="card.challenge">挑戰模式</span>
         </div>
-        <div class="big-card" onclick="goToDsePage()">
-          <span class="icon">🗞️</span><span data-i18n="card.dse">DSE 試卷</span>
-        </div>
       </div>
       <div class="actions">
         <button class="btn btn-neutral" data-i18n="btn.backHome" onclick="goHome()">返回主頁</button>
@@ -1376,7 +1373,7 @@
     <!-- 練習模式：課題列表（按課題 / 按課本） -->
     <section id="practiceListPage" class="page hidden">
       <h2 class="page-title" data-i18n="page.practice">練習模式</h2>
-      <p class="sub" data-i18n="practice.subtitle">按課題（每課題 20 題）或按課本（整冊）練習</p>
+      <p class="sub" data-i18n="practice.subtitle">按課題（每課題 100 題）或按課本（整冊）練習</p>
       <div id="practiceSwitch" class="practice-switch" role="group" aria-label="練習列表切換">
         <button class="practice-switch-btn active" data-mode="topic" data-i18n="practice.switchTopic" onclick="setPracticeListMode('topic')">按課題</button>
         <button class="practice-switch-btn" data-mode="book" data-i18n="practice.switchBook" onclick="setPracticeListMode('book')">按課本</button>
@@ -1686,33 +1683,33 @@
   <!-- Supabase JS SDK（CDN，純靜態友好） -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- 本機腳本加入 ?v= 版本參數（cache-busting），確保瀏覽器載入更新後的檔案、不會沿用舊快取 -->
-  <script src="topics.js?v=0.9.9"></script>
-  <script src="questionBank1.js?v=0.9.9"></script>
-  <script src="questionBank2.js?v=0.9.9"></script>
-  <script src="questionBank3.js?v=0.9.9"></script>
-  <script src="frontierTech.js?v=0.9.9"></script>
-  <script src="longQuestions1.js?v=0.9.9"></script>
-  <script src="longQuestions2.js?v=0.9.9"></script>
-  <script src="longQuestions3.js?v=0.9.9"></script>
-  <script src="bookLongQuestions.js?v=0.9.9"></script>
+  <script src="topics.js?v=1.0.0"></script>
+  <script src="questionBank1.js?v=1.0.0"></script>
+  <script src="questionBank2.js?v=1.0.0"></script>
+  <script src="questionBank3.js?v=1.0.0"></script>
+  <script src="frontierTech.js?v=1.0.0"></script>
+  <script src="longQuestions1.js?v=1.0.0"></script>
+  <script src="longQuestions2.js?v=1.0.0"></script>
+  <script src="longQuestions3.js?v=1.0.0"></script>
+  <script src="bookLongQuestions.js?v=1.0.0"></script>
   <!-- English (UK) content banks（應用程式語言為 English (UK) 時載入，由 app.js 按語言選用） -->
-  <script src="topics.en.js?v=0.9.9"></script>
-  <script src="questionBank1.en.js?v=0.9.9"></script>
-  <script src="questionBank2.en.js?v=0.9.9"></script>
-  <script src="questionBank3.en.js?v=0.9.9"></script>
-  <script src="frontierTech.en.js?v=0.9.9"></script>
-  <script src="longQuestions1.en.js?v=0.9.9"></script>
-  <script src="longQuestions2.en.js?v=0.9.9"></script>
-  <script src="longQuestions3.en.js?v=0.9.9"></script>
-  <script src="bookLongQuestions.en.js?v=0.9.9"></script>
-  <script src="notes.js?v=0.9.9"></script>
-  <script src="notes.en.js?v=0.9.9"></script>
+  <script src="topics.en.js?v=1.0.0"></script>
+  <script src="questionBank1.en.js?v=1.0.0"></script>
+  <script src="questionBank2.en.js?v=1.0.0"></script>
+  <script src="questionBank3.en.js?v=1.0.0"></script>
+  <script src="frontierTech.en.js?v=1.0.0"></script>
+  <script src="longQuestions1.en.js?v=1.0.0"></script>
+  <script src="longQuestions2.en.js?v=1.0.0"></script>
+  <script src="longQuestions3.en.js?v=1.0.0"></script>
+  <script src="bookLongQuestions.en.js?v=1.0.0"></script>
+  <script src="notes.js?v=1.0.0"></script>
+  <script src="notes.en.js?v=1.0.0"></script>
   <!-- DSE 試卷內容（dsePapers.js：5 套中英雙語模擬試卷，每套含 Paper 1 + Paper 2） -->
-  <script src="dsePapers.js?v=0.9.9"></script>
+  <script src="dsePapers.js?v=1.0.0"></script>
   <!-- FAQ 內容（faq.js：中英雙語常見問題，仿照長題目資料檔） -->
-  <script src="faq.js?v=0.9.9"></script>
+  <script src="faq.js?v=1.0.0"></script>
   <!-- Supabase 專案設定（請先喺 supabaseConfig.js 填上 SUPABASE_URL 同 SUPABASE_ANON_KEY） -->
-  <script src="supabaseConfig.js?v=0.9.9"></script>
-  <script src="app.js?v=0.9.9"></script>
+  <script src="supabaseConfig.js?v=1.0.0"></script>
+  <script src="app.js?v=1.0.0"></script>
 </body>
 </html>
